@@ -61,9 +61,8 @@ Netlify will read `netlify.toml` automatically.
 Add these in Netlify Site Settings, Environment Variables:
 
 ```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY
 GOOGLE_WORKSPACE_SMTP_USER=claimtofame@goodstuph.org
 GOOGLE_WORKSPACE_SMTP_PASS
@@ -74,7 +73,7 @@ ALLOWED_EMAIL_DOMAIN=goodstuph.org
 
 Use Supabase Project Settings, API Keys, to find the Supabase URL, publishable key, and secret key.
 
-The publishable key is safe for the browser app. The secret key is private and must only be added to Netlify environment variables for server-side functions.
+The publishable key is returned to the browser at runtime by a Netlify function. The secret key is private and must only be added to Netlify environment variables for server-side functions.
 
 ## 6. Deploy
 

@@ -1,7 +1,6 @@
 import { LogIn } from 'lucide-react';
-import { supabase, isConfigured } from '../lib/supabase.js';
 
-export default function AuthGate() {
+export default function AuthGate({ supabase, configError }) {
   async function signIn() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -21,9 +20,9 @@ export default function AuthGate() {
         <p className="eyebrow">GOODSTUPH</p>
         <h1>Claim to Fame</h1>
         <p className="auth-copy">Claims, approvals, receipts, and paid status in one dark little corner of order.</p>
-        {!isConfigured ? (
+        {configError ? (
           <div className="notice">
-            Add your Supabase keys to environment variables before signing in.
+            Add your Supabase runtime environment variables before signing in.
           </div>
         ) : (
           <button className="primary-button" onClick={signIn}>

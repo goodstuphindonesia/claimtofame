@@ -1,11 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+let clientPromise;
 
-export const isConfigured = Boolean(supabaseUrl && supabasePublishableKey);
+export async function getSupabaseClient() {
+  if (!clientPromise) {
+    clientPromise = fetch('/.netlify/functions/runtime-config')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await response.text());
+        return response.json();
+      })
+      .then(({ supabaseUrl, supabasePublishableKey }) => {
+        if (!supabaseUrl || !supabasePublishableKey) {
+          throw new Error('Supabase runtime config is missing.');
+        }
+        return createClient(supabaseUrl, supabasePublishableKey);
+      });
+  }
 
-export const supabase = isConfigured
-  ? createClient(supabaseUrl, supabasePublishableKey)
-  : null;
+  return clientPromise;
+}

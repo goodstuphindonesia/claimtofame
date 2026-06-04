@@ -25,7 +25,7 @@ import {
   STATUS_LABELS,
 } from './lib/constants.js';
 import { formatDate, formatMoney, monthValue } from './lib/format.js';
-import { isConfigured, supabase } from './lib/supabase.js';
+import { getSupabaseClient } from './lib/supabase.js';
 
 const emptyClaim = {
   title: '',
@@ -50,26 +50,35 @@ export default function App() {
   const [activeView, setActiveView] = useState('claims');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [supabase, setSupabase] = useState(null);
+  const [configError, setConfigError] = useState('');
 
   useEffect(() => {
-    if (!isConfigured) {
-      setLoading(false);
-      return;
-    }
+    let subscription;
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    getSupabaseClient()
+      .then((client) => {
+        setSupabase(client);
+        client.auth.getSession().then(({ data }) => {
+          setSession(data.session);
+        });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-    });
+        const { data: listener } = client.auth.onAuthStateChange((_event, nextSession) => {
+          setSession(nextSession);
+        });
 
-    return () => listener.subscription.unsubscribe();
+        subscription = listener.subscription;
+      })
+      .catch((error) => {
+        setConfigError(error.message);
+        setLoading(false);
+      });
+
+    return () => subscription?.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!session?.user) {
+    if (!supabase || !session?.user) {
       setProfile(null);
       setClaims([]);
       setLoading(false);
@@ -77,7 +86,7 @@ export default function App() {
     }
 
     bootstrap();
-  }, [session?.user?.id]);
+  }, [supabase, session?.user?.id]);
 
   async function bootstrap() {
     setLoading(true);
@@ -152,7 +161,7 @@ export default function App() {
     if (loading) return <LoadingScreen />;
     return (
       <>
-        <AuthGate />
+        <AuthGate supabase={supabase} configError={configError} />
         {message && <div className="toast">{message}</div>}
       </>
     );
@@ -579,7 +588,8 @@ function ClaimCard({ claim, canEdit, onEdit, onDelete, onCancel, canCancel, canD
 
 function ReceiptLinks({ receipts }) {
   async function openReceipt(receipt) {
-    const { data, error } = await supabase.storage.from('claim-receipts').createSignedUrl(receipt.file_path, 60);
+    const client = await getSupabaseClient();
+    const { data, error } = await client.storage.from('claim-receipts').createSignedUrl(receipt.file_path, 60);
     if (error) {
       alert(error.message);
       return;
