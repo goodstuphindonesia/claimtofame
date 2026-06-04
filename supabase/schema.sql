@@ -28,7 +28,7 @@ create table if not exists public.profiles (
   is_active boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint profiles_goodstuph_domain check (right(lower(email), 13) = '@goodstuph.org')
+  constraint profiles_goodstuph_domain check (right(lower(email), 14) = '@goodstuph.org')
 );
 
 create table if not exists public.claim_categories (
