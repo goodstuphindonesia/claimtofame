@@ -7,7 +7,7 @@ It is built for:
 - Netlify frontend hosting
 - Supabase authentication, database, storage, and security
 - Google Workspace login for `@goodstuph.org`
-- Weekday 9:00 AM Asia/Jakarta email digests from `claimtofame@goodstuph.org`
+- Weekday 9:00 AM Asia/Jakarta email digests
 
 ## Project Structure
 

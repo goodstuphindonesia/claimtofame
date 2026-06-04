@@ -11,8 +11,8 @@ function transporter() {
     port: 465,
     secure: true,
     auth: {
-      user: process.env.GOOGLE_WORKSPACE_SMTP_USER,
-      pass: process.env.GOOGLE_WORKSPACE_SMTP_PASS,
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
   });
 }
@@ -38,7 +38,7 @@ async function sendDigest(mail, to, subject, sections) {
   if (!htmlSections) return false;
 
   await mail.sendMail({
-    from: `"${process.env.EMAIL_FROM_NAME || 'Claim to Fame'}" <${process.env.GOOGLE_WORKSPACE_SMTP_USER}>`,
+    from: `"Claim to Fame" <${process.env.SMTP_USER}>`,
     to,
     subject,
     html: `

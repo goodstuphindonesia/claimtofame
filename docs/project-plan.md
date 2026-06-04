@@ -102,8 +102,8 @@ The export is a ZIP:
 GOODSTUPH-approved-claims-YYYY-MM.zip
 ├── claims.csv
 └── receipts/
-    ├── employee@goodstuph.org/
-    └── another.employee@goodstuph.org/
+    ├── employee-email/
+    └── another-employee-email/
 ```
 
 Receipt names use:

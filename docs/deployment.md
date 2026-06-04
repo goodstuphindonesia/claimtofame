@@ -27,7 +27,7 @@ After this, Super Admins can invite and activate other users from inside the app
 
 ## 3. Google Workspace Email
 
-Use `claimtofame@goodstuph.org` as the sender.
+Use the dedicated Claim to Fame Google Workspace mailbox as the sender.
 
 Recommended setup:
 
@@ -64,11 +64,9 @@ Add these in Netlify Site Settings, Environment Variables:
 SUPABASE_URL
 SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY
-GOOGLE_WORKSPACE_SMTP_USER=claimtofame@goodstuph.org
-GOOGLE_WORKSPACE_SMTP_PASS
+SMTP_USER
+SMTP_PASS
 APP_BASE_URL
-EMAIL_FROM_NAME=Claim to Fame
-ALLOWED_EMAIL_DOMAIN=goodstuph.org
 ```
 
 Use Supabase Project Settings, API Keys, to find the Supabase URL, publishable key, and secret key.
@@ -104,3 +102,4 @@ That is 2:00 AM UTC, which is 9:00 AM Asia/Jakarta.
 - Managers and Super Admins can access receipts for review.
 - Permanent deletion is available to Super Admins.
 - Audit logs keep before/after values for claim edits and status changes.
+- Keep Netlify environment variables limited to the exact list above.

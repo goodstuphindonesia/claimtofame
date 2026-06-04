@@ -834,7 +834,7 @@ function SettingsView({ users, categories, onChanged }) {
             </div>
           ))}
           <div className="notice">
-            Domain: goodstuph.org · Digest: weekdays at 9:00 AM Asia/Jakarta · Sender: claimtofame@goodstuph.org
+            Domain: goodstuph.org · Digest: weekdays at 9:00 AM Asia/Jakarta
           </div>
         </div>
       </div>
