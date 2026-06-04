@@ -413,12 +413,24 @@ textarea {
 }
 
 .notice,
-.toast {
+.toast,
+.help-panel {
   border: 1px solid #68421d;
   background: #1d1207;
   color: #ffd9b3;
   padding: 12px 14px;
   border-radius: 8px;
+}
+
+.help-panel {
+  margin-top: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.help-panel span {
+  color: #e9d4bc;
+  line-height: 1.45;
 }
 
 .toast {

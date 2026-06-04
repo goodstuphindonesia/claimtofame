@@ -430,7 +430,8 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
   }
 
   const canEdit = (claim) =>
-    isSuperAdmin || (claim.claimant_id === profile.id && ['draft', 'needs_changes'].includes(claim.status));
+    (claim.claimant_id === profile.id && ['draft', 'needs_changes'].includes(claim.status))
+    || (isSuperAdmin && claim.claimant_id !== profile.id && claim.status !== 'paid');
 
   async function markPaid(claim) {
     const comment = prompt('Comment optional:') || '';
@@ -453,6 +454,10 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             <h3>{editing ? 'Edit Claim' : 'Submit a Claim'}</h3>
           </div>
           {editing && <button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel edit</button>}
+        </div>
+        <div className="help-panel">
+          <strong>Before you submit</strong>
+          <span>Use one form per claim item. Add the vendor or merchant, Job No., business purpose, amount, date, and at least one receipt. Save Draft keeps it editable; Submit sends it for approval and locks your edits unless it is returned as Needs Changes.</span>
         </div>
         <div className="form-grid">
           <label>
@@ -765,9 +770,24 @@ function Metric({ label, value }) {
 function SettingsView({ supabase, users, categories, onChanged }) {
   const [newCategory, setNewCategory] = useState('');
   const [invite, setInvite] = useState({ email: '', full_name: '', role: 'employee', manager_id: '' });
+  const [settingsMessage, setSettingsMessage] = useState('');
 
   async function updateUser(user, patch) {
-    await supabase.from('profiles').update(patch).eq('id', user.id);
+    setSettingsMessage('');
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch('/.netlify/functions/invite-user', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${data.session?.access_token || ''}`,
+      },
+      body: JSON.stringify({ id: user.id, patch }),
+    });
+    if (!response.ok) {
+      setSettingsMessage(await response.text());
+      return;
+    }
+    setSettingsMessage('User settings saved.');
     onChanged();
   }
 
@@ -821,6 +841,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
             </select>
             <button className="primary-button" type="submit"><Plus size={18} /> Invite</button>
           </form>
+          {settingsMessage && <div className="notice">{settingsMessage}</div>}
           {users.map((user) => (
             <div className="settings-row" key={user.id}>
               <div>

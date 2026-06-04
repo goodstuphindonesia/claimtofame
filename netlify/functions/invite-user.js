@@ -1,7 +1,7 @@
 import { serviceClient, requireSuperAdmin } from './_supabase.js';
 
 export async function handler(event) {
-  if (event.httpMethod !== 'POST') {
+  if (!['POST', 'PATCH'].includes(event.httpMethod)) {
     return { statusCode: 405, body: 'Method not allowed' };
   }
 
@@ -9,7 +9,30 @@ export async function handler(event) {
   const auth = await requireSuperAdmin(event, supabase);
   if (auth.error) return { statusCode: auth.status, body: auth.error };
 
-  const { email, full_name, role, manager_id } = JSON.parse(event.body || '{}');
+  const body = JSON.parse(event.body || '{}');
+
+  if (event.httpMethod === 'PATCH') {
+    const { id, patch } = body;
+    if (!id || !patch) return { statusCode: 400, body: 'Missing user update details.' };
+
+    const allowed = {};
+    if (patch.role) allowed.role = patch.role;
+    if ('manager_id' in patch) allowed.manager_id = patch.manager_id || null;
+    if ('is_active' in patch) allowed.is_active = Boolean(patch.is_active);
+
+    const { error } = await supabase.from('profiles').update(allowed).eq('id', id);
+    if (error) return { statusCode: 500, body: error.message };
+
+    await supabase.from('audit_logs').insert({
+      actor_id: auth.profile.id,
+      action: 'user_updated',
+      after_values: { id, patch: allowed },
+    });
+
+    return { statusCode: 200, body: 'User updated.' };
+  }
+
+  const { email, full_name, role, manager_id } = body;
   if (!email?.endsWith('@goodstuph.org')) {
     return { statusCode: 400, body: 'Only goodstuph.org emails can be invited.' };
   }
