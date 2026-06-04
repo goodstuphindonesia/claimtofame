@@ -568,7 +568,7 @@ function ClaimQuestPanel({ claims }) {
     <section className="quest-panel">
       <div className="quest-copy">
         <p>Claim board</p>
-        <h3>Move every claim from receipt to fame.</h3>
+        <h3>Take back what belongs to you.</h3>
         <span>{completion}% of your claim items are approved or paid.</span>
         <div className="progress-track">
           <div className="progress-fill" style={{ width: `${completion}%` }} />
