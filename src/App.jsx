@@ -189,7 +189,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <img src="/claimtofame-logo.png" alt="Claim to Fame" />
+          <img src="/claimtofame-logo.svg" alt="Claim to Fame" />
           <div>
             <p>GOODSTUPH</p>
             <h1>Claim to Fame</h1>
@@ -268,7 +268,7 @@ function LoadingScreen() {
   return (
     <main className="auth-shell">
       <section className="auth-panel compact">
-        <img src="/claimtofame-logo.png" alt="" className="auth-logo" />
+        <img src="/claimtofame-logo.svg" alt="" className="auth-logo" />
         <p>Loading Claim to Fame...</p>
       </section>
     </main>

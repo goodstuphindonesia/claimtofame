@@ -61,13 +61,21 @@ button {
 
 .auth-shell {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
+  display: block;
   padding: 24px;
   background:
     linear-gradient(135deg, rgba(255, 77, 0, 0.28), transparent 34rem),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 18px),
     #070705;
+}
+
+.auth-page {
+  min-height: calc(100vh - 48px);
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  gap: 28px;
 }
 
 .auth-panel {
@@ -80,6 +88,8 @@ button {
   text-align: center;
   display: grid;
   justify-items: center;
+  align-content: center;
+  min-height: min(620px, calc(100vh - 80px));
 }
 
 .auth-panel.compact {
@@ -116,6 +126,71 @@ button {
 .auth-copy,
 .muted {
   color: var(--muted);
+}
+
+.preview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--lime);
+  text-decoration: none;
+  font-weight: 800;
+  margin-top: 8px;
+}
+
+.preview-section {
+  width: 100%;
+  display: grid;
+  gap: 18px;
+  padding: 20px 0 44px;
+}
+
+.centered-heading {
+  justify-content: center;
+  text-align: center;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.preview-card {
+  min-height: 230px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
+    var(--panel);
+  border-radius: 8px;
+  padding: 20px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  text-align: center;
+  gap: 10px;
+}
+
+.preview-card > span {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #140700;
+  background: linear-gradient(135deg, var(--lime), var(--orange-2));
+}
+
+.preview-card h3 {
+  font-family: var(--headline-font);
+  margin: 4px 0;
+  font-size: 23px;
+}
+
+.preview-card p {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.35;
 }
 
 .app-shell {
@@ -643,6 +718,7 @@ summary {
   .form-grid,
   .settings-grid,
   .quest-panel,
+  .preview-grid,
   .metric-grid {
     grid-template-columns: 1fr;
   }
