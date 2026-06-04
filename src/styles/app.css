@@ -145,6 +145,59 @@ button {
   padding: 20px 0 44px;
 }
 
+.preview-page-shell {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 77, 0, 0.08), transparent 360px),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px),
+    var(--bg);
+}
+
+.preview-page {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.preview-hero {
+  position: relative;
+  border: 1px solid rgba(255, 154, 0, 0.24);
+  background:
+    linear-gradient(135deg, rgba(255, 77, 0, 0.18), rgba(20, 20, 19, 0.9)),
+    var(--panel);
+  border-radius: 8px;
+  padding: 26px;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.preview-hero h1 {
+  font-family: var(--headline-font);
+  font-size: clamp(38px, 7vw, 72px);
+  margin: 0;
+}
+
+.preview-hero span {
+  color: var(--muted);
+}
+
+.preview-back {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--lime);
+  text-decoration: none;
+  font-weight: 900;
+  font-size: 13px;
+}
+
 .centered-heading {
   justify-content: center;
   text-align: center;
