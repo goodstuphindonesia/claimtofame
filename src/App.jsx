@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   CheckCircle2,
+  CircleDollarSign,
   Download,
   FileText,
   Filter,
@@ -11,7 +12,10 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
+  Target,
   Trash2,
+  Trophy,
   Upload,
   XCircle,
 } from 'lucide-react';
@@ -222,9 +226,12 @@ export default function App() {
             <p>{ROLES[profile.role]}</p>
             <h2>{profile.full_name || profile.email}</h2>
           </div>
-          <button className="icon-button" onClick={refresh} aria-label="Refresh">
-            <RefreshCw size={18} />
-          </button>
+          <div className="topbar-actions">
+            <span className="rank-badge"><Sparkles size={15} /> Claim Crew</span>
+            <button className="icon-button" onClick={refresh} aria-label="Refresh">
+              <RefreshCw size={18} />
+            </button>
+          </div>
         </header>
 
         {activeView === 'claims' && (
@@ -283,6 +290,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     const matchesMonth = !filters.month || claim.incurred_date?.startsWith(filters.month);
     return matchesSearch && matchesStatus && matchesCategory && matchesMonth;
   });
+  const ownClaims = claims.filter((claim) => claim.claimant_id === profile.id);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -447,6 +455,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
 
   return (
     <section className="view-stack">
+      <ClaimQuestPanel claims={ownClaims} />
       <form className="claim-form" onSubmit={submitClaim}>
         <div className="section-heading">
           <div>
@@ -545,6 +554,44 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         ))}
       </div>
     </section>
+  );
+}
+
+function ClaimQuestPanel({ claims }) {
+  const submitted = claims.filter((claim) => claim.status === 'submitted').length;
+  const approved = claims.filter((claim) => ['manager_approved', 'admin_approved', 'paid'].includes(claim.status)).length;
+  const needsWork = claims.filter((claim) => ['draft', 'needs_changes'].includes(claim.status)).length;
+  const total = claims.length;
+  const completion = total ? Math.round((approved / total) * 100) : 0;
+
+  return (
+    <section className="quest-panel">
+      <div className="quest-copy">
+        <p>Claim board</p>
+        <h3>Move every claim from receipt to fame.</h3>
+        <span>{completion}% of your claim items are approved or paid.</span>
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${completion}%` }} />
+        </div>
+      </div>
+      <div className="quest-stats">
+        <QuestStat icon={<Trophy size={18} />} label="Approved" value={approved} />
+        <QuestStat icon={<Target size={18} />} label="Submitted" value={submitted} />
+        <QuestStat icon={<CircleDollarSign size={18} />} label="To finish" value={needsWork} />
+      </div>
+    </section>
+  );
+}
+
+function QuestStat({ icon, label, value }) {
+  return (
+    <article className="quest-stat">
+      <span>{icon}</span>
+      <div>
+        <strong>{value}</strong>
+        <small>{label}</small>
+      </div>
+    </article>
   );
 }
 

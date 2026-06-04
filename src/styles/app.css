@@ -1,13 +1,17 @@
 :root {
   color-scheme: dark;
-  --bg: #050505;
-  --panel: #121212;
-  --panel-2: #1a1a1a;
-  --line: #2b2b2b;
+  --bg: #070705;
+  --panel: #141413;
+  --panel-2: #1d1b18;
+  --panel-3: #23201c;
+  --line: #332e28;
   --text: #f7f2e8;
-  --muted: #a8a29a;
+  --muted: #b1a99c;
   --orange: #ff4d00;
   --orange-2: #ff9a00;
+  --lime: #c7ff45;
+  --mint: #52f2b8;
+  --sky: #69c7ff;
   --danger: #ff355d;
   --success: #2ef28d;
   --warning: #ffd166;
@@ -20,7 +24,10 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, rgba(255, 77, 0, 0.08), transparent 360px),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px),
+    var(--bg);
   color: var(--text);
 }
 
@@ -41,17 +48,18 @@ button {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(255, 77, 0, 0.25), transparent 32rem),
-    linear-gradient(135deg, #050505 0%, #14110e 100%);
+    linear-gradient(135deg, rgba(255, 77, 0, 0.28), transparent 34rem),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 18px),
+    #070705;
 }
 
 .auth-panel {
   width: min(460px, 100%);
   border: 1px solid var(--line);
-  background: rgba(18, 18, 18, 0.92);
+  background: rgba(20, 20, 19, 0.94);
   padding: 32px;
   border-radius: 8px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .auth-panel.compact {
@@ -101,7 +109,9 @@ button {
   height: 100vh;
   padding: 24px;
   border-right: 1px solid var(--line);
-  background: #090909;
+  background:
+    linear-gradient(180deg, #15120f, #080807 48%),
+    #090909;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -111,6 +121,10 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 154, 0, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 77, 0, 0.06);
 }
 
 .brand img {
@@ -126,7 +140,7 @@ button {
 
 nav {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 nav button,
@@ -138,7 +152,7 @@ nav button,
   min-height: 42px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--panel);
+  background: linear-gradient(180deg, #1d1b18, #121211);
   color: var(--text);
   padding: 10px 14px;
   display: inline-flex;
@@ -146,6 +160,11 @@ nav button,
   justify-content: center;
   gap: 8px;
   text-decoration: none;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
 }
 
 nav button {
@@ -154,15 +173,16 @@ nav button {
 
 nav button.active,
 .primary-button {
-  background: var(--orange);
+  background: linear-gradient(135deg, var(--orange), var(--orange-2));
   border-color: var(--orange);
   color: #160600;
   font-weight: 800;
+  box-shadow: 0 10px 24px rgba(255, 77, 0, 0.24);
 }
 
 .secondary-button {
   background: #211b16;
-  border-color: #483224;
+  border-color: #63402b;
 }
 
 .danger-button {
@@ -198,6 +218,32 @@ nav button.active,
   gap: 16px;
 }
 
+.topbar {
+  border: 1px solid rgba(255, 154, 0, 0.18);
+  background: linear-gradient(135deg, rgba(255, 77, 0, 0.12), rgba(20, 20, 19, 0.82));
+  padding: 16px 18px;
+  border-radius: 8px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(199, 255, 69, 0.28);
+  color: var(--lime);
+  background: rgba(199, 255, 69, 0.08);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .topbar h2,
 .section-heading h3 {
   margin: 0;
@@ -215,9 +261,93 @@ nav button.active,
 .mini-card,
 .empty-state {
   border: 1px solid var(--line);
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent),
+    var(--panel);
   border-radius: 8px;
   padding: 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+}
+
+.quest-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  border-radius: 8px;
+  padding: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 77, 0, 0.22), rgba(105, 199, 255, 0.08)),
+    #141312;
+}
+
+.quest-copy p {
+  color: var(--lime);
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 900;
+  margin: 0 0 8px;
+}
+
+.quest-copy h3 {
+  margin: 0 0 8px;
+  font-size: clamp(24px, 4vw, 42px);
+  line-height: 1.05;
+}
+
+.quest-copy span {
+  color: #efe2d0;
+}
+
+.quest-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quest-stat {
+  min-height: 112px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 8, 8, 0.5);
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  align-content: space-between;
+}
+
+.quest-stat > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #140700;
+  background: var(--lime);
+}
+
+.quest-stat strong {
+  display: block;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.quest-stat small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.progress-track {
+  height: 10px;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lime), var(--orange-2));
 }
 
 .form-grid {
@@ -239,11 +369,18 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  background: #080808;
+  background: #0c0b0a;
   color: var(--text);
   border-radius: 8px;
   padding: 11px 12px;
   min-height: 42px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid rgba(255, 154, 0, 0.34);
+  border-color: var(--orange-2);
 }
 
 textarea {
@@ -281,7 +418,7 @@ textarea {
   justify-content: flex-start;
   flex-wrap: wrap;
   border: 1px solid var(--line);
-  background: var(--panel-2);
+  background: rgba(29, 27, 24, 0.82);
   padding: 14px;
   border-radius: 8px;
 }
@@ -318,6 +455,16 @@ textarea {
 .claim-card {
   display: grid;
   gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.claim-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--orange), var(--lime), var(--sky));
 }
 
 .claim-main h3 {
@@ -468,6 +615,7 @@ summary {
 
   .form-grid,
   .settings-grid,
+  .quest-panel,
   .metric-grid {
     grid-template-columns: 1fr;
   }
@@ -477,6 +625,10 @@ summary {
   }
 
   .invite-form {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-stats {
     grid-template-columns: 1fr;
   }
 }
@@ -493,6 +645,11 @@ summary {
   .filters {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .button-row {
