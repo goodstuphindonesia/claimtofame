@@ -229,6 +229,7 @@ export default function App() {
 
         {activeView === 'claims' && (
           <ClaimsView
+            supabase={supabase}
             profile={profile}
             categories={categories}
             claims={visibleClaims}
@@ -239,6 +240,7 @@ export default function App() {
         )}
         {activeView === 'approvals' && (
           <ApprovalsView
+            supabase={supabase}
             profile={profile}
             managerQueue={managerQueue}
             adminQueue={adminQueue}
@@ -246,9 +248,9 @@ export default function App() {
             isSuperAdmin={isSuperAdmin}
           />
         )}
-        {activeView === 'reports' && isSuperAdmin && <ReportsView claims={claims} auditLogs={auditLogs} />}
+        {activeView === 'reports' && isSuperAdmin && <ReportsView supabase={supabase} claims={claims} auditLogs={auditLogs} />}
         {activeView === 'settings' && isSuperAdmin && (
-          <SettingsView users={users} categories={categories} onChanged={refresh} />
+          <SettingsView supabase={supabase} users={users} categories={categories} onChanged={refresh} />
         )}
       </main>
     </div>
@@ -266,11 +268,12 @@ function LoadingScreen() {
   );
 }
 
-function ClaimsView({ profile, categories, claims, users, onChanged, isSuperAdmin }) {
+function ClaimsView({ supabase, profile, categories, claims, users, onChanged, isSuperAdmin }) {
   const [form, setForm] = useState(emptyClaim);
   const [files, setFiles] = useState([]);
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({ search: '', status: '', category: '', month: '' });
+  const [formError, setFormError] = useState('');
 
   const filtered = claims.filter((claim) => {
     const haystack = `${claim.title} ${claim.vendor_name} ${claim.job_no} ${claim.claimant?.full_name}`.toLowerCase();
@@ -303,14 +306,16 @@ function ClaimsView({ profile, categories, claims, users, onChanged, isSuperAdmi
 
   async function submitClaim(event) {
     event.preventDefault();
+    setFormError('');
     if (!editing && files.length === 0) {
-      alert('Please upload at least one receipt or invoice.');
+      setFormError('Please upload at least one receipt or invoice.');
       return;
     }
 
     const isOwnManagerClaim = profile.role === 'manager';
     const managerId = profile.role === 'employee' ? profile.manager_id : null;
-    const status = form.saveMode === 'draft' ? 'draft' : isOwnManagerClaim ? 'manager_approved' : 'submitted';
+    const saveMode = event.nativeEvent.submitter?.value || 'submitted';
+    const status = saveMode === 'draft' ? 'draft' : isOwnManagerClaim ? 'manager_approved' : 'submitted';
 
     const payload = {
       title: form.title,
@@ -328,40 +333,59 @@ function ClaimsView({ profile, categories, claims, users, onChanged, isSuperAdmi
 
     let claimId = editing?.id;
     if (editing) {
-      await supabase.from('claims').update(payload).eq('id', editing.id);
-      await supabase.from('approval_events').insert({
+      const { error: updateError } = await supabase.from('claims').update(payload).eq('id', editing.id);
+      if (updateError) {
+        setFormError(updateError.message);
+        return;
+      }
+      const { error: eventError } = await supabase.from('approval_events').insert({
         claim_id: editing.id,
         actor_id: profile.id,
         action: 'edited',
         comment: 'Claim details updated',
       });
+      if (eventError) {
+        setFormError(eventError.message);
+        return;
+      }
     } else {
       const { data, error } = await supabase.from('claims').insert(payload).select('id').single();
       if (error) {
-        alert(error.message);
+        setFormError(error.message);
         return;
       }
       claimId = data.id;
-      await supabase.from('approval_events').insert({
+      const { error: eventError } = await supabase.from('approval_events').insert({
         claim_id: claimId,
         actor_id: profile.id,
         action: status === 'draft' ? 'draft_created' : 'submitted',
         comment: status === 'manager_approved' ? 'Manager claim routed to Super Admin' : null,
       });
+      if (eventError) {
+        setFormError(eventError.message);
+        return;
+      }
     }
 
     for (const file of files) {
       const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
       const path = `${profile.id}/${claimId}/${Date.now()}-${cleanName}`;
       const uploaded = await supabase.storage.from('claim-receipts').upload(path, file);
-      if (!uploaded.error) {
-        await supabase.from('claim_receipts').insert({
-          claim_id: claimId,
-          file_name: file.name,
-          file_path: path,
-          file_size: file.size,
-          content_type: file.type,
-        });
+      if (uploaded.error) {
+        setFormError(uploaded.error.message);
+        return;
+      }
+
+      const { error: receiptError } = await supabase.from('claim_receipts').insert({
+        claim_id: claimId,
+        file_name: file.name,
+        file_path: path,
+        file_size: file.size,
+        content_type: file.type,
+      });
+      if (receiptError) {
+        setFormError(receiptError.message);
+        return;
       }
     }
 
@@ -482,13 +506,14 @@ function ClaimsView({ profile, categories, claims, users, onChanged, isSuperAdmi
           </label>
         </div>
         <div className="button-row">
-          <button type="submit" className="primary-button" onClick={() => updateField('saveMode', 'submitted')}>
+          <button type="submit" name="saveMode" value="submitted" className="primary-button">
             <CheckCircle2 size={18} /> Submit
           </button>
-          <button type="submit" className="secondary-button" onClick={() => updateField('saveMode', 'draft')}>
+          <button type="submit" name="saveMode" value="draft" className="secondary-button">
             <Archive size={18} /> Save Draft
           </button>
         </div>
+        {formError && <div className="notice">{formError}</div>}
       </form>
 
       <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
@@ -605,7 +630,7 @@ function ReceiptLinks({ receipts }) {
   ));
 }
 
-function ApprovalsView({ profile, managerQueue, adminQueue, onChanged, isSuperAdmin }) {
+function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged, isSuperAdmin }) {
   async function act(claim, action, status) {
     const requiresReason = ['rejected', 'needs_changes'].includes(status);
     const comment = prompt(requiresReason ? 'Reason required:' : 'Comment optional:') || '';
@@ -658,7 +683,7 @@ function ApprovalsView({ profile, managerQueue, adminQueue, onChanged, isSuperAd
   );
 }
 
-function ReportsView({ claims, auditLogs }) {
+function ReportsView({ supabase, claims, auditLogs }) {
   const [month, setMonth] = useState(monthValue());
   const approvedClaims = claims.filter((claim) => claim.status === 'admin_approved');
   const paidClaims = claims.filter((claim) => claim.status === 'paid');
@@ -737,7 +762,7 @@ function Metric({ label, value }) {
   return <article className="metric"><p>{label}</p><h3>{value}</h3></article>;
 }
 
-function SettingsView({ users, categories, onChanged }) {
+function SettingsView({ supabase, users, categories, onChanged }) {
   const [newCategory, setNewCategory] = useState('');
   const [invite, setInvite] = useState({ email: '', full_name: '', role: 'employee', manager_id: '' });
 
