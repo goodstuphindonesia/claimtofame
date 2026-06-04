@@ -16,7 +16,7 @@ export default function AuthGate({ supabase, configError }) {
   return (
     <main className="auth-shell">
       <section className="auth-panel">
-        <img src="/goodstuph-logo.png" alt="GOODSTUPH" className="auth-logo" />
+        <img src="/claimtofame-logo.png" alt="Claim to Fame" className="auth-logo" />
         <p className="eyebrow">GOODSTUPH</p>
         <h1>Claim to Fame</h1>
         <p className="auth-copy">Claims, approvals, receipts, and paid status in one dark little corner of order.</p>

@@ -77,6 +77,9 @@ button {
   padding: 32px;
   border-radius: 8px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  text-align: center;
+  display: grid;
+  justify-items: center;
 }
 
 .auth-panel.compact {
@@ -84,8 +87,8 @@ button {
 }
 
 .auth-logo {
-  width: 112px;
-  height: 112px;
+  width: 132px;
+  height: 132px;
   object-fit: contain;
 }
 
@@ -146,9 +149,10 @@ button {
 }
 
 .brand img {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   object-fit: contain;
+  border-radius: 8px;
 }
 
 .brand h1 {
