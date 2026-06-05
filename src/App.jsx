@@ -294,8 +294,9 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     return matchesSearch && matchesStatus && matchesCategory && matchesMonth;
   });
   const ownClaims = claims.filter((claim) => claim.claimant_id === profile.id);
-  const ownDraftClaims = filtered.filter((claim) => claim.claimant_id === profile.id && claim.status === 'draft');
+  const ownDraftClaims = claims.filter((claim) => claim.claimant_id === profile.id && claim.status === 'draft');
   const selectedDraftClaims = ownDraftClaims.filter((claim) => selectedDraftIds.includes(claim.id));
+  const filteredHistory = filtered.filter((claim) => !(claim.claimant_id === profile.id && claim.status === 'draft'));
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -446,8 +447,12 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     );
   }
 
-  function toggleAllDrafts(checked) {
-    setSelectedDraftIds(checked ? ownDraftClaims.map((claim) => claim.id) : []);
+  function selectAllDrafts() {
+    setSelectedDraftIds(ownDraftClaims.map((claim) => claim.id));
+  }
+
+  function clearDraftSelection() {
+    setSelectedDraftIds([]);
   }
 
   async function submitDraftClaims(drafts) {
@@ -592,30 +597,70 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         {formError && <div className="notice">{formError}</div>}
       </form>
 
-      <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
       {ownDraftClaims.length > 0 && (
-        <div className="draft-bulk-bar">
-          <label className="draft-check">
-            <input
-              type="checkbox"
-              checked={selectedDraftClaims.length === ownDraftClaims.length}
-              onChange={(event) => toggleAllDrafts(event.target.checked)}
-            />
-            Select all draft claims
-          </label>
-          <span>{selectedDraftClaims.length} selected</span>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!selectedDraftClaims.length}
-            onClick={() => submitDraftClaims(selectedDraftClaims)}
-          >
-            <CheckCircle2 size={16} /> Submit Selected
-          </button>
-        </div>
+        <section className="draft-section">
+          <div className="section-heading">
+            <div>
+              <p>Draft submissions</p>
+              <h3>Finish These Claims</h3>
+            </div>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={selectAllDrafts}>
+                Select All
+              </button>
+              <button type="button" className="secondary-button" onClick={clearDraftSelection} disabled={!selectedDraftClaims.length}>
+                Clear
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!selectedDraftClaims.length}
+                onClick={() => submitDraftClaims(selectedDraftClaims)}
+              >
+                <CheckCircle2 size={16} /> Submit Selected
+              </button>
+            </div>
+          </div>
+          <div className="draft-bulk-bar">
+            <span>{selectedDraftClaims.length} of {ownDraftClaims.length} selected</span>
+            <span>Select drafts below, or submit them one at a time.</span>
+          </div>
+          <div className="claim-list">
+            {ownDraftClaims.map((claim) => (
+              <ClaimCard
+                key={claim.id}
+                claim={claim}
+                canEdit={canEdit(claim)}
+                onEdit={() => editClaim(claim)}
+                onDelete={() => deleteClaim(claim)}
+                onCancel={() => cancelDraft(claim)}
+                canCancel
+                canDelete={isSuperAdmin}
+                canViewReceipts={isSuperAdmin}
+                selectionControl={
+                  <label className="draft-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedDraftIds.includes(claim.id)}
+                      onChange={() => toggleDraftSelection(claim.id)}
+                    />
+                    Select
+                  </label>
+                }
+                actions={
+                  <button className="primary-button" onClick={() => submitDraftClaims([claim])}>
+                    <CheckCircle2 size={16} /> Submit Draft
+                  </button>
+                }
+              />
+            ))}
+          </div>
+        </section>
       )}
+
+      <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
       <div className="claim-list">
-        {filtered.map((claim) => (
+        {filteredHistory.map((claim) => (
           <ClaimCard
             key={claim.id}
             claim={claim}
@@ -626,25 +671,8 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             canCancel={claim.claimant_id === profile.id && claim.status === 'draft'}
             canDelete={isSuperAdmin}
             canViewReceipts={isSuperAdmin}
-            selectionControl={
-              claim.claimant_id === profile.id && claim.status === 'draft' ? (
-                <label className="draft-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedDraftIds.includes(claim.id)}
-                    onChange={() => toggleDraftSelection(claim.id)}
-                  />
-                  Draft
-                </label>
-              ) : null
-            }
             actions={
               <>
-                {claim.claimant_id === profile.id && claim.status === 'draft' && (
-                  <button className="primary-button" onClick={() => submitDraftClaims([claim])}>
-                    <CheckCircle2 size={16} /> Submit Draft
-                  </button>
-                )}
                 {isSuperAdmin && claim.status === 'admin_approved' && (
                   <button className="primary-button" onClick={() => markPaid(claim)}>
                     <CheckCircle2 size={16} /> Mark Paid
