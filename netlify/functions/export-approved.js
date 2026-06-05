@@ -18,14 +18,8 @@ function jakartaMonthRange(month) {
   };
 }
 
-function expenseMonthRange(month) {
-  const startDate = `${month}-01`;
-  const end = new Date(`${month}-01T00:00:00Z`);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  return {
-    startDate,
-    endDate: end.toISOString().slice(0, 10),
-  };
+function dateIsInMonth(value, month) {
+  return String(value || '').slice(0, 7) === month;
 }
 
 async function loadReceiptRecords(supabase, claim) {
@@ -52,7 +46,6 @@ export async function handler(event) {
   }
 
   const { startIso, endIso } = jakartaMonthRange(month);
-  const { startDate, endDate } = expenseMonthRange(month);
 
   const { data: approvalEvents, error: eventError } = await supabase
     .from('approval_events')
@@ -65,48 +58,56 @@ export async function handler(event) {
   if (eventError) return { statusCode: 500, body: eventError.message };
 
   const approvedAtByClaimId = new Map();
-  const claimIds = new Set();
+  const approvalEventClaimIds = new Set();
   for (const approvalEvent of approvalEvents || []) {
     if (!approvedAtByClaimId.has(approvalEvent.claim_id)) {
       approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
     }
-    claimIds.add(approvalEvent.claim_id);
+    approvalEventClaimIds.add(approvalEvent.claim_id);
   }
 
-  const { data: expenseMonthClaims, error: expenseMonthError } = await supabase
+  const { data: approvedClaims, error } = await supabase
     .from('claims')
-    .select('id,updated_at')
+    .select(`
+      *,
+      claimant:profiles!claims_claimant_id_fkey(full_name,email),
+      category:claim_categories(name),
+      receipts:claim_receipts(file_name,file_path)
+    `)
     .in('status', ['admin_approved', 'paid'])
-    .gte('incurred_date', startDate)
-    .lt('incurred_date', endDate);
+    .order('incurred_date', { ascending: true });
 
-  if (expenseMonthError) return { statusCode: 500, body: expenseMonthError.message };
+  if (error) return { statusCode: 500, body: error.message };
 
-  for (const claim of expenseMonthClaims || []) {
-    claimIds.add(claim.id);
-    if (!approvedAtByClaimId.has(claim.id)) {
+  const exportSummary = {
+    requested_month: month,
+    approved_or_paid_claims_found: approvedClaims?.length || 0,
+    matched_by_admin_approval_event: 0,
+    matched_by_expense_month: 0,
+    matched_by_latest_update_month: 0,
+    exported_claims: 0,
+  };
+
+  const claims = (approvedClaims || []).filter((claim) => {
+    const matchedByApprovalEvent = approvalEventClaimIds.has(claim.id);
+    const matchedByExpenseMonth = dateIsInMonth(claim.incurred_date, month);
+    const matchedByUpdatedMonth = dateIsInMonth(claim.updated_at, month);
+
+    if (matchedByApprovalEvent) exportSummary.matched_by_admin_approval_event += 1;
+    if (matchedByExpenseMonth) exportSummary.matched_by_expense_month += 1;
+    if (matchedByUpdatedMonth) exportSummary.matched_by_latest_update_month += 1;
+
+    if (!approvedAtByClaimId.has(claim.id) && matchedByUpdatedMonth) {
       approvedAtByClaimId.set(claim.id, claim.updated_at);
     }
-  }
 
-  let claims = [];
-  const ids = [...claimIds];
+    return matchedByApprovalEvent || matchedByExpenseMonth || matchedByUpdatedMonth;
+  });
 
-  if (ids.length) {
-    const { data, error } = await supabase
-      .from('claims')
-      .select(`
-        *,
-        claimant:profiles!claims_claimant_id_fkey(full_name,email),
-        category:claim_categories(name),
-        receipts:claim_receipts(file_name,file_path)
-      `)
-      .in('id', ids)
-      .in('status', ['admin_approved', 'paid'])
-      .order('incurred_date', { ascending: true });
+  exportSummary.exported_claims = claims.length;
 
-    if (error) return { statusCode: 500, body: error.message };
-    claims = data || [];
+  if (!claims.length && approvedClaims?.length) {
+    exportSummary.note = 'Approved or paid claims exist, but none matched the selected month by Admin approval event, expense date, or latest update.';
   }
 
   const zip = new JSZip();
@@ -166,6 +167,7 @@ export async function handler(event) {
   }
 
   zip.file('claims.csv', rows.join('\n'));
+  zip.file('export-summary.json', JSON.stringify(exportSummary, null, 2));
   if (missingReceipts.length) {
     zip.file('missing-receipts.txt', missingReceipts.join('\n'));
   }

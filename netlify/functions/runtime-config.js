@@ -1,5 +1,7 @@
+import { normalizeSupabaseUrl } from './_supabase.js';
+
 export async function handler() {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL);
   const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabasePublishableKey) {

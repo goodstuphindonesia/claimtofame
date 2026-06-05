@@ -606,10 +606,13 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             </div>
             <div className="button-row">
               <button type="button" className="secondary-button" onClick={selectAllDrafts}>
-                Select All
+                Select All Drafts
               </button>
               <button type="button" className="secondary-button" onClick={clearDraftSelection} disabled={!selectedDraftClaims.length}>
                 Clear
+              </button>
+              <button type="button" className="primary-button" onClick={() => submitDraftClaims(ownDraftClaims)}>
+                <CheckCircle2 size={16} /> Submit All Drafts
               </button>
               <button
                 type="button"
@@ -617,13 +620,16 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
                 disabled={!selectedDraftClaims.length}
                 onClick={() => submitDraftClaims(selectedDraftClaims)}
               >
-                <CheckCircle2 size={16} /> Submit Selected
+                <CheckCircle2 size={16} /> Submit Selected Drafts
               </button>
             </div>
           </div>
           <div className="draft-bulk-bar">
+            <button type="button" className="secondary-button" onClick={selectAllDrafts}>
+              Select All Drafts
+            </button>
             <span>{selectedDraftClaims.length} of {ownDraftClaims.length} selected</span>
-            <span>Select drafts below, or submit them one at a time.</span>
+            <span>Use Submit All Drafts to send the full draft stack at once.</span>
           </div>
           <div className="claim-list">
             {ownDraftClaims.map((claim) => (
