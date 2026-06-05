@@ -32,7 +32,6 @@ import { formatDate, formatMoney, monthValue } from './lib/format.js';
 import { getSupabaseClient } from './lib/supabase.js';
 
 const emptyClaim = {
-  title: '',
   category_id: '',
   vendor_name: '',
   amount: '',
@@ -40,7 +39,6 @@ const emptyClaim = {
   incurred_date: '',
   job_no: '',
   business_purpose: '',
-  notes: '',
   saveMode: 'submitted',
 };
 
@@ -285,6 +283,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({ search: '', status: '', category: '', month: '' });
   const [formError, setFormError] = useState('');
+  const [selectedDraftIds, setSelectedDraftIds] = useState([]);
 
   const filtered = claims.filter((claim) => {
     const haystack = `${claim.title} ${claim.vendor_name} ${claim.job_no} ${claim.claimant?.full_name}`.toLowerCase();
@@ -295,9 +294,25 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     return matchesSearch && matchesStatus && matchesCategory && matchesMonth;
   });
   const ownClaims = claims.filter((claim) => claim.claimant_id === profile.id);
+  const ownDraftClaims = filtered.filter((claim) => claim.claimant_id === profile.id && claim.status === 'draft');
+  const selectedDraftClaims = ownDraftClaims.filter((claim) => selectedDraftIds.includes(claim.id));
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function submissionRoute() {
+    const isOwnManagerClaim = profile.role === 'manager';
+    return {
+      status: isOwnManagerClaim ? 'manager_approved' : 'submitted',
+      managerId: profile.role === 'employee' ? profile.manager_id : null,
+      eventComment: isOwnManagerClaim ? 'Manager claim routed to Super Admin' : null,
+    };
+  }
+
+  function titleFromClaimForm() {
+    const category = categories.find((item) => item.id === form.category_id)?.name || 'Claim';
+    return `${category} - ${form.vendor_name || form.job_no || 'Untitled'}`;
   }
 
   function validateFiles(nextFiles) {
@@ -324,13 +339,16 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
       return;
     }
 
-    const isOwnManagerClaim = profile.role === 'manager';
-    const managerId = profile.role === 'employee' ? profile.manager_id : null;
+    const route = submissionRoute();
     const saveMode = event.nativeEvent.submitter?.value || 'submitted';
-    const status = saveMode === 'draft' ? 'draft' : isOwnManagerClaim ? 'manager_approved' : 'submitted';
+    const status = saveMode === 'draft' ? 'draft' : route.status;
+
+    if (status !== 'draft' && !confirm('Submit this claim for approval? You will not be able to edit it unless it is returned as Needs Changes.')) {
+      return;
+    }
 
     const payload = {
-      title: form.title,
+      title: titleFromClaimForm(),
       category_id: form.category_id,
       vendor_name: form.vendor_name,
       amount: Number(form.amount),
@@ -338,9 +356,9 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
       incurred_date: form.incurred_date,
       job_no: form.job_no,
       business_purpose: form.business_purpose,
-      notes: form.notes || null,
+      notes: null,
       status,
-      manager_id: managerId,
+      manager_id: route.managerId,
     };
 
     let claimId = editing?.id;
@@ -371,7 +389,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         claim_id: claimId,
         actor_id: profile.id,
         action: status === 'draft' ? 'draft_created' : 'submitted',
-        comment: status === 'manager_approved' ? 'Manager claim routed to Super Admin' : null,
+        comment: status === route.status ? route.eventComment : null,
       });
       if (eventError) {
         setFormError(eventError.message);
@@ -410,7 +428,6 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
   function editClaim(claim) {
     setEditing(claim);
     setForm({
-      title: claim.title,
       category_id: claim.category_id,
       vendor_name: claim.vendor_name,
       amount: claim.amount,
@@ -418,10 +435,59 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
       incurred_date: claim.incurred_date,
       job_no: claim.job_no,
       business_purpose: claim.business_purpose,
-      notes: claim.notes || '',
       saveMode: claim.status === 'draft' ? 'draft' : 'submitted',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function toggleDraftSelection(claimId) {
+    setSelectedDraftIds((current) =>
+      current.includes(claimId) ? current.filter((id) => id !== claimId) : [...current, claimId]
+    );
+  }
+
+  function toggleAllDrafts(checked) {
+    setSelectedDraftIds(checked ? ownDraftClaims.map((claim) => claim.id) : []);
+  }
+
+  async function submitDraftClaims(drafts) {
+    if (!drafts.length) return;
+    const label = drafts.length === 1 ? 'this draft claim' : `${drafts.length} draft claims`;
+    if (!confirm(`Submit ${label} for approval? You will not be able to edit submitted claims unless they are returned as Needs Changes.`)) {
+      return;
+    }
+
+    setFormError('');
+    const route = submissionRoute();
+
+    for (const claim of drafts) {
+      const { error: updateError } = await supabase
+        .from('claims')
+        .update({ status: route.status, manager_id: route.managerId })
+        .eq('id', claim.id)
+        .eq('claimant_id', profile.id)
+        .eq('status', 'draft');
+
+      if (updateError) {
+        setFormError(updateError.message);
+        return;
+      }
+
+      const { error: eventError } = await supabase.from('approval_events').insert({
+        claim_id: claim.id,
+        actor_id: profile.id,
+        action: 'submitted',
+        comment: route.eventComment,
+      });
+
+      if (eventError) {
+        setFormError(eventError.message);
+        return;
+      }
+    }
+
+    setSelectedDraftIds([]);
+    onChanged();
   }
 
   async function cancelDraft(claim) {
@@ -474,10 +540,6 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         </div>
         <div className="form-grid">
           <label>
-            Title
-            <input required value={form.title} onChange={(e) => updateField('title', e.target.value)} />
-          </label>
-          <label>
             Category
             <select required value={form.category_id} onChange={(e) => updateField('category_id', e.target.value)}>
               <option value="">Select category</option>
@@ -512,10 +574,6 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             Business purpose
             <textarea required value={form.business_purpose} onChange={(e) => updateField('business_purpose', e.target.value)} />
           </label>
-          <label className="wide">
-            Notes
-            <textarea value={form.notes} onChange={(e) => updateField('notes', e.target.value)} />
-          </label>
           <label className="upload-box wide">
             <Upload size={18} />
             Receipt / invoice files
@@ -535,6 +593,27 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
       </form>
 
       <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
+      {ownDraftClaims.length > 0 && (
+        <div className="draft-bulk-bar">
+          <label className="draft-check">
+            <input
+              type="checkbox"
+              checked={selectedDraftClaims.length === ownDraftClaims.length}
+              onChange={(event) => toggleAllDrafts(event.target.checked)}
+            />
+            Select all draft claims
+          </label>
+          <span>{selectedDraftClaims.length} selected</span>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!selectedDraftClaims.length}
+            onClick={() => submitDraftClaims(selectedDraftClaims)}
+          >
+            <CheckCircle2 size={16} /> Submit Selected
+          </button>
+        </div>
+      )}
       <div className="claim-list">
         {filtered.map((claim) => (
           <ClaimCard
@@ -547,12 +626,31 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             canCancel={claim.claimant_id === profile.id && claim.status === 'draft'}
             canDelete={isSuperAdmin}
             canViewReceipts={isSuperAdmin}
-            actions={
-              isSuperAdmin && claim.status === 'admin_approved' ? (
-                <button className="primary-button" onClick={() => markPaid(claim)}>
-                  <CheckCircle2 size={16} /> Mark Paid
-                </button>
+            selectionControl={
+              claim.claimant_id === profile.id && claim.status === 'draft' ? (
+                <label className="draft-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedDraftIds.includes(claim.id)}
+                    onChange={() => toggleDraftSelection(claim.id)}
+                  />
+                  Draft
+                </label>
               ) : null
+            }
+            actions={
+              <>
+                {claim.claimant_id === profile.id && claim.status === 'draft' && (
+                  <button className="primary-button" onClick={() => submitDraftClaims([claim])}>
+                    <CheckCircle2 size={16} /> Submit Draft
+                  </button>
+                )}
+                {isSuperAdmin && claim.status === 'admin_approved' && (
+                  <button className="primary-button" onClick={() => markPaid(claim)}>
+                    <CheckCircle2 size={16} /> Mark Paid
+                  </button>
+                )}
+              </>
             }
           />
         ))}
@@ -628,7 +726,7 @@ function ClaimFilters({ filters, setFilters, categories }) {
   );
 }
 
-function ClaimCard({ claim, canEdit, onEdit, onDelete, onCancel, canCancel, canDelete, canViewReceipts = false, actions }) {
+function ClaimCard({ claim, canEdit, onEdit, onDelete, onCancel, canCancel, canDelete, canViewReceipts = false, actions, selectionControl }) {
   return (
     <article className="claim-card">
       <div className="claim-main">
@@ -637,7 +735,10 @@ function ClaimCard({ claim, canEdit, onEdit, onDelete, onCancel, canCancel, canD
           <h3>{claim.title}</h3>
           <span>{claim.vendor_name} · Job {claim.job_no}</span>
         </div>
-        <StatusPill status={claim.status} />
+        <div className="claim-card-side">
+          {selectionControl}
+          <StatusPill status={claim.status} />
+        </div>
       </div>
       <div className="claim-meta">
         <span>{formatMoney(claim.amount, claim.currency)}</span>

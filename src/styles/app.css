@@ -559,6 +559,46 @@ textarea {
   color: #160600;
 }
 
+.claim-card-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.draft-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  background: #131313;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.draft-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.draft-check input {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--orange);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .metric h3,
 .mini-card h3 {
   font-family: var(--headline-font);
@@ -679,9 +719,15 @@ summary {
   .topbar,
   .section-heading,
   .claim-main,
+  .draft-bulk-bar,
   .filters {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .claim-card-side {
+    align-items: flex-start;
+    justify-content: flex-start;
   }
 
   .topbar-actions {

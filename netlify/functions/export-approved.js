@@ -10,6 +10,14 @@ function safeFileName(value) {
   return String(value || 'unknown').replace(/[^a-zA-Z0-9._@-]/g, '-');
 }
 
+function jakartaMonthRange(month) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return {
+    startIso: new Date(Date.UTC(year, monthNumber - 1, 1, -7, 0, 0)).toISOString(),
+    endIso: new Date(Date.UTC(year, monthNumber, 1, -7, 0, 0)).toISOString(),
+  };
+}
+
 export async function handler(event) {
   const supabase = serviceClient();
   const auth = await requireSuperAdmin(event, supabase);
@@ -20,44 +28,64 @@ export async function handler(event) {
     return { statusCode: 400, body: 'Use month=YYYY-MM.' };
   }
 
-  const start = `${month}-01`;
-  const end = new Date(`${month}-01T00:00:00Z`);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  const endDate = end.toISOString().slice(0, 10);
+  const { startIso, endIso } = jakartaMonthRange(month);
 
-  const { data: claims, error } = await supabase
-    .from('claims')
-    .select(`
-      *,
-      claimant:profiles!claims_claimant_id_fkey(full_name,email),
-      category:claim_categories(name),
-      receipts:claim_receipts(file_name,file_path)
-    `)
-    .eq('status', 'admin_approved')
-    .gte('incurred_date', start)
-    .lt('incurred_date', endDate)
-    .order('incurred_date', { ascending: true });
+  const { data: approvalEvents, error: eventError } = await supabase
+    .from('approval_events')
+    .select('claim_id,created_at')
+    .eq('action', 'admin_approved')
+    .gte('created_at', startIso)
+    .lt('created_at', endIso)
+    .order('created_at', { ascending: true });
 
-  if (error) return { statusCode: 500, body: error.message };
+  if (eventError) return { statusCode: 500, body: eventError.message };
+
+  const approvedAtByClaimId = new Map();
+  for (const approvalEvent of approvalEvents || []) {
+    if (!approvedAtByClaimId.has(approvalEvent.claim_id)) {
+      approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
+    }
+  }
+
+  const claimIds = [...approvedAtByClaimId.keys()];
+  let claims = [];
+
+  if (claimIds.length) {
+    const { data, error } = await supabase
+      .from('claims')
+      .select(`
+        *,
+        claimant:profiles!claims_claimant_id_fkey(full_name,email),
+        category:claim_categories(name),
+        receipts:claim_receipts(file_name,file_path)
+      `)
+      .in('id', claimIds)
+      .in('status', ['admin_approved', 'paid'])
+      .order('incurred_date', { ascending: true });
+
+    if (error) return { statusCode: 500, body: error.message };
+    claims = data || [];
+  }
 
   const zip = new JSZip();
   const headers = [
     'claim_id',
     'employee_name',
     'employee_email',
-    'title',
     'category',
     'vendor_merchant',
     'amount',
     'currency',
     'date_incurred',
+    'admin_approved_at',
     'job_no',
     'business_purpose',
-    'notes',
+    'status',
     'receipt_files',
   ];
 
   const rows = [headers.map(csvEscape).join(',')];
+  const missingReceipts = [];
 
   for (const claim of claims || []) {
     const employee = safeFileName(claim.claimant?.email);
@@ -72,6 +100,8 @@ export async function handler(event) {
       if (fileData) {
         const buffer = Buffer.from(await fileData.arrayBuffer());
         zip.file(`receipts/${employee}/${targetName}`, buffer);
+      } else {
+        missingReceipts.push(`${claim.id}: ${receipt.file_name}`);
       }
     }
 
@@ -79,20 +109,23 @@ export async function handler(event) {
       claim.id,
       claim.claimant?.full_name,
       claim.claimant?.email,
-      claim.title,
       claim.category?.name,
       claim.vendor_name,
       claim.amount,
       claim.currency,
       claim.incurred_date,
+      approvedAtByClaimId.get(claim.id),
       claim.job_no,
       claim.business_purpose,
-      claim.notes,
+      claim.status,
       receiptNames.join('; '),
     ].map(csvEscape).join(','));
   }
 
   zip.file('claims.csv', rows.join('\n'));
+  if (missingReceipts.length) {
+    zip.file('missing-receipts.txt', missingReceipts.join('\n'));
+  }
 
   await supabase.from('audit_logs').insert({
     actor_id: auth.profile.id,
