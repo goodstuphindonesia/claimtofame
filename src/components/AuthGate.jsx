@@ -1,4 +1,4 @@
-import { Eye, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
 export default function AuthGate({ supabase, configError }) {
   async function signIn() {
@@ -31,10 +31,6 @@ export default function AuthGate({ supabase, configError }) {
               Sign in with Google
             </button>
           )}
-          <a className="preview-link" href="/preview">
-            Preview the workspace
-            <Eye size={16} />
-          </a>
         </section>
       </div>
     </main>

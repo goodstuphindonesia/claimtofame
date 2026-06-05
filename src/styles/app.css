@@ -128,188 +128,6 @@ button {
   color: var(--muted);
 }
 
-.preview-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--lime);
-  text-decoration: none;
-  font-weight: 800;
-  margin-top: 8px;
-}
-
-.preview-section {
-  width: 100%;
-  display: grid;
-  gap: 18px;
-  padding: 20px 0 44px;
-}
-
-.preview-page-shell {
-  min-height: 100vh;
-  padding: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 77, 0, 0.08), transparent 360px),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px),
-    var(--bg);
-}
-
-.preview-page {
-  width: min(1120px, 100%);
-  margin: 0 auto;
-  display: grid;
-  gap: 18px;
-}
-
-.preview-hero {
-  position: relative;
-  border: 1px solid rgba(255, 154, 0, 0.24);
-  background:
-    linear-gradient(135deg, rgba(255, 77, 0, 0.18), rgba(20, 20, 19, 0.9)),
-    var(--panel);
-  border-radius: 8px;
-  padding: 26px;
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 8px;
-}
-
-.preview-hero h1 {
-  font-family: var(--headline-font);
-  font-size: clamp(38px, 7vw, 72px);
-  margin: 0;
-}
-
-.preview-hero span {
-  color: var(--muted);
-}
-
-.preview-back {
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--lime);
-  text-decoration: none;
-  font-weight: 900;
-  font-size: 13px;
-}
-
-.centered-heading {
-  justify-content: center;
-  text-align: center;
-}
-
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.preview-tab {
-  border: 1px solid var(--line);
-  background: rgba(20, 20, 19, 0.72);
-  color: var(--text);
-  min-height: 54px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 900;
-}
-
-.preview-tab.active {
-  background: linear-gradient(135deg, var(--orange), var(--orange-2));
-  color: #160600;
-  border-color: var(--orange);
-}
-
-.preview-workspace {
-  border: 1px solid rgba(255, 154, 0, 0.24);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
-    rgba(20, 20, 19, 0.94);
-  border-radius: 8px;
-  padding: 18px;
-  display: grid;
-  gap: 14px;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.32);
-}
-
-.preview-topbar,
-.preview-claim-row,
-.preview-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.preview-topbar p,
-.preview-metrics p {
-  color: var(--lime);
-  text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 900;
-  margin: 0 0 4px;
-}
-
-.preview-topbar h3 {
-  font-family: var(--headline-font);
-  font-size: 28px;
-  margin: 0;
-}
-
-.preview-form-grid,
-.preview-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.preview-form-grid textarea {
-  min-height: 70px;
-}
-
-.status-chip {
-  border: 1px solid rgba(199, 255, 69, 0.28);
-  color: var(--lime);
-  background: rgba(199, 255, 69, 0.08);
-  border-radius: 999px;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.status-chip.warning {
-  color: #160600;
-  background: var(--warning);
-}
-
-.preview-claim-row,
-.preview-metrics article {
-  border: 1px solid var(--line);
-  background: rgba(8, 8, 8, 0.44);
-  border-radius: 8px;
-  padding: 14px;
-}
-
-.preview-claim-row span {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.preview-metrics article strong {
-  font-family: var(--headline-font);
-  font-size: 32px;
-}
-
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -835,9 +653,6 @@ summary {
   .form-grid,
   .settings-grid,
   .quest-panel,
-  .preview-grid,
-  .preview-form-grid,
-  .preview-metrics,
   .metric-grid {
     grid-template-columns: 1fr;
   }
@@ -864,16 +679,9 @@ summary {
   .topbar,
   .section-heading,
   .claim-main,
-  .preview-topbar,
-  .preview-claim-row,
   .filters {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .preview-actions {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .topbar-actions {

@@ -20,7 +20,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import AuthGate from './components/AuthGate.jsx';
-import PreviewPage from './components/PreviewPage.jsx';
 import StatusPill from './components/StatusPill.jsx';
 import {
   ACCEPTED_RECEIPT_TYPES,
@@ -46,10 +45,6 @@ const emptyClaim = {
 };
 
 export default function App() {
-  if (window.location.pathname === '/preview') {
-    return <PreviewPage />;
-  }
-
   return <ClaimApp />;
 }
 
