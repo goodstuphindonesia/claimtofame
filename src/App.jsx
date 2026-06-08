@@ -147,7 +147,7 @@ function ClaimApp() {
       .from('claims')
       .select(`
         *,
-        claimant:profiles!claims_claimant_id_fkey(full_name,email,manager_id),
+        claimant:profiles!claims_claimant_id_fkey(full_name,email,manager_id,role),
         manager:profiles!claims_manager_id_fkey(full_name,email),
         category:claim_categories(name),
         receipts:claim_receipts(id,file_name,file_path,file_size,content_type),
@@ -294,20 +294,20 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     return matchesSearch && matchesStatus && matchesCategory && matchesMonth;
   });
   const ownClaims = claims.filter((claim) => claim.claimant_id === profile.id);
-  const ownDraftClaims = claims.filter((claim) => claim.claimant_id === profile.id && claim.status === 'draft');
-  const selectedDraftClaims = ownDraftClaims.filter((claim) => selectedDraftIds.includes(claim.id));
-  const filteredHistory = filtered.filter((claim) => !(claim.claimant_id === profile.id && claim.status === 'draft'));
+  const bulkDraftClaims = filtered.filter((claim) => claim.status === 'draft' && (isSuperAdmin || claim.claimant_id === profile.id));
+  const selectedDraftClaims = bulkDraftClaims.filter((claim) => selectedDraftIds.includes(claim.id));
+  const filteredHistory = filtered.filter((claim) => !bulkDraftClaims.some((draft) => draft.id === claim.id));
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function submissionRoute() {
-    const isOwnManagerClaim = profile.role === 'manager';
+  function submissionRoute(claim = null) {
+    const claimantIsManager = claim ? claim.claimant?.role === 'manager' : profile.role === 'manager';
     return {
-      status: isOwnManagerClaim ? 'manager_approved' : 'submitted',
-      managerId: profile.role === 'employee' ? profile.manager_id : null,
-      eventComment: isOwnManagerClaim ? 'Manager claim routed to Super Admin' : null,
+      status: claimantIsManager ? 'manager_approved' : 'submitted',
+      managerId: claimantIsManager ? null : claim?.manager_id || claim?.claimant?.manager_id || profile.manager_id || null,
+      eventComment: claimantIsManager ? 'Manager claim routed to Super Admin' : null,
     };
   }
 
@@ -448,7 +448,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
   }
 
   function selectAllDrafts() {
-    setSelectedDraftIds(ownDraftClaims.map((claim) => claim.id));
+    setSelectedDraftIds(bulkDraftClaims.map((claim) => claim.id));
   }
 
   function clearDraftSelection() {
@@ -463,15 +463,20 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     }
 
     setFormError('');
-    const route = submissionRoute();
 
     for (const claim of drafts) {
-      const { error: updateError } = await supabase
+      const route = submissionRoute(claim);
+      let updateQuery = supabase
         .from('claims')
         .update({ status: route.status, manager_id: route.managerId })
         .eq('id', claim.id)
-        .eq('claimant_id', profile.id)
         .eq('status', 'draft');
+
+      if (!isSuperAdmin) {
+        updateQuery = updateQuery.eq('claimant_id', profile.id);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (updateError) {
         setFormError(updateError.message);
@@ -482,7 +487,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         claim_id: claim.id,
         actor_id: profile.id,
         action: 'submitted',
-        comment: route.eventComment,
+        comment: route.eventComment || (isSuperAdmin && claim.claimant_id !== profile.id ? 'Draft submitted by Super Admin' : null),
       });
 
       if (eventError) {
@@ -597,7 +602,9 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         {formError && <div className="notice">{formError}</div>}
       </form>
 
-      {ownDraftClaims.length > 0 && (
+      <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
+
+      {bulkDraftClaims.length > 0 && (
         <section className="draft-section">
           <div className="section-heading">
             <div>
@@ -611,7 +618,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
               <button type="button" className="secondary-button" onClick={clearDraftSelection} disabled={!selectedDraftClaims.length}>
                 Clear
               </button>
-              <button type="button" className="primary-button" onClick={() => submitDraftClaims(ownDraftClaims)}>
+              <button type="button" className="primary-button" onClick={() => submitDraftClaims(bulkDraftClaims)}>
                 <CheckCircle2 size={16} /> Submit All Drafts
               </button>
               <button
@@ -628,11 +635,11 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
             <button type="button" className="secondary-button" onClick={selectAllDrafts}>
               Select All Drafts
             </button>
-            <span>{selectedDraftClaims.length} of {ownDraftClaims.length} selected</span>
+            <span>{selectedDraftClaims.length} of {bulkDraftClaims.length} selected</span>
             <span>Use Submit All Drafts to send the full draft stack at once.</span>
           </div>
           <div className="claim-list">
-            {ownDraftClaims.map((claim) => (
+            {bulkDraftClaims.map((claim) => (
               <ClaimCard
                 key={claim.id}
                 claim={claim}
@@ -664,7 +671,6 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         </section>
       )}
 
-      <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
       <div className="claim-list">
         {filteredHistory.map((claim) => (
           <ClaimCard
