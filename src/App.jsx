@@ -828,6 +828,12 @@ function ReceiptLinks({ receipts }) {
 }
 
 function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged, isSuperAdmin }) {
+  const [selectedManagerClaimIds, setSelectedManagerClaimIds] = useState([]);
+  const [selectedAdminClaimIds, setSelectedAdminClaimIds] = useState([]);
+
+  const selectedManagerClaims = managerQueue.filter((claim) => selectedManagerClaimIds.includes(claim.id));
+  const selectedAdminClaims = adminQueue.filter((claim) => selectedAdminClaimIds.includes(claim.id));
+
   async function act(claim, action, status) {
     const requiresReason = ['rejected', 'needs_changes'].includes(status);
     const comment = prompt(requiresReason ? 'Reason required:' : 'Comment optional:') || '';
@@ -840,6 +846,54 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
       action,
       comment: comment || null,
     });
+    onChanged();
+  }
+
+  function toggleSelection(queue, claimId) {
+    const setSelected = queue === 'manager' ? setSelectedManagerClaimIds : setSelectedAdminClaimIds;
+    setSelected((current) =>
+      current.includes(claimId) ? current.filter((id) => id !== claimId) : [...current, claimId]
+    );
+  }
+
+  function selectQueue(queue, checked) {
+    if (queue === 'manager') {
+      setSelectedManagerClaimIds(checked ? managerQueue.map((claim) => claim.id) : []);
+      return;
+    }
+    setSelectedAdminClaimIds(checked ? adminQueue.map((claim) => claim.id) : []);
+  }
+
+  async function bulkApprove(claimsToApprove, action, status, queue) {
+    if (!claimsToApprove.length) return;
+    const label = claimsToApprove.length === 1 ? 'this claim' : `${claimsToApprove.length} claims`;
+    if (!confirm(`Approve ${label}?`)) return;
+
+    for (const claim of claimsToApprove) {
+      const { error: updateError } = await supabase.from('claims').update({ status }).eq('id', claim.id);
+      if (updateError) {
+        alert(updateError.message);
+        return;
+      }
+
+      const { error: eventError } = await supabase.from('approval_events').insert({
+        claim_id: claim.id,
+        actor_id: profile.id,
+        action,
+        comment: claimsToApprove.length > 1 ? 'Bulk approved' : null,
+      });
+
+      if (eventError) {
+        alert(eventError.message);
+        return;
+      }
+    }
+
+    if (queue === 'manager') {
+      setSelectedManagerClaimIds([]);
+    } else {
+      setSelectedAdminClaimIds([]);
+    }
     onChanged();
   }
 
@@ -862,16 +916,92 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
   return (
     <section className="view-stack">
       <div className="section-heading"><div><p>Manager queue</p><h3>Claims Waiting for You</h3></div></div>
+      {managerQueue.length > 0 && (
+        <div className="approval-bulk-bar">
+          <label className="draft-check">
+            <input
+              type="checkbox"
+              checked={selectedManagerClaims.length === managerQueue.length}
+              onChange={(event) => selectQueue('manager', event.target.checked)}
+            />
+            Select all manager approvals
+          </label>
+          <span>{selectedManagerClaims.length} of {managerQueue.length} selected</span>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!selectedManagerClaims.length}
+            onClick={() => bulkApprove(selectedManagerClaims, 'manager_approved', 'manager_approved', 'manager')}
+          >
+            <CheckCircle2 size={16} /> Bulk Approve
+          </button>
+        </div>
+      )}
       <div className="claim-list">
-        {managerQueue.map((claim) => <ClaimCard key={claim.id} claim={claim} canViewReceipts actions={managerActions(claim)} />)}
+        {managerQueue.map((claim) => (
+          <ClaimCard
+            key={claim.id}
+            claim={claim}
+            canViewReceipts
+            selectionControl={
+              <label className="draft-check">
+                <input
+                  type="checkbox"
+                  checked={selectedManagerClaimIds.includes(claim.id)}
+                  onChange={() => toggleSelection('manager', claim.id)}
+                />
+                Select
+              </label>
+            }
+            actions={managerActions(claim)}
+          />
+        ))}
         {!managerQueue.length && <EmptyState text="No manager approvals waiting." />}
       </div>
 
       {isSuperAdmin && (
         <>
           <div className="section-heading"><div><p>Super Admin queue</p><h3>Final Approval</h3></div></div>
+          {adminQueue.length > 0 && (
+            <div className="approval-bulk-bar">
+              <label className="draft-check">
+                <input
+                  type="checkbox"
+                  checked={selectedAdminClaims.length === adminQueue.length}
+                  onChange={(event) => selectQueue('admin', event.target.checked)}
+                />
+                Select all final approvals
+              </label>
+              <span>{selectedAdminClaims.length} of {adminQueue.length} selected</span>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!selectedAdminClaims.length}
+                onClick={() => bulkApprove(selectedAdminClaims, 'admin_approved', 'admin_approved', 'admin')}
+              >
+                <CheckCircle2 size={16} /> Bulk Final Approve
+              </button>
+            </div>
+          )}
           <div className="claim-list">
-            {adminQueue.map((claim) => <ClaimCard key={claim.id} claim={claim} canViewReceipts actions={adminActions(claim)} />)}
+            {adminQueue.map((claim) => (
+              <ClaimCard
+                key={claim.id}
+                claim={claim}
+                canViewReceipts
+                selectionControl={
+                  <label className="draft-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedAdminClaimIds.includes(claim.id)}
+                      onChange={() => toggleSelection('admin', claim.id)}
+                    />
+                    Select
+                  </label>
+                }
+                actions={adminActions(claim)}
+              />
+            ))}
             {!adminQueue.length && <EmptyState text="No final approvals waiting." />}
           </div>
         </>

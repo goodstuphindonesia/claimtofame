@@ -641,7 +641,8 @@ textarea {
   justify-content: flex-end;
 }
 
-.draft-bulk-bar {
+.draft-bulk-bar,
+.approval-bulk-bar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -653,6 +654,13 @@ textarea {
   border-radius: 8px;
   padding: 12px;
   box-shadow: var(--shadow-sm);
+}
+
+.approval-bulk-bar {
+  border-color: rgba(105, 199, 255, 0.24);
+  background:
+    linear-gradient(135deg, rgba(105, 199, 255, 0.1), rgba(255, 154, 0, 0.05)),
+    rgba(17, 17, 17, 0.9);
 }
 
 .draft-check {
@@ -807,6 +815,7 @@ summary::marker {
   .section-heading,
   .claim-main,
   .draft-bulk-bar,
+  .approval-bulk-bar,
   .filters {
     align-items: stretch;
     flex-direction: column;
