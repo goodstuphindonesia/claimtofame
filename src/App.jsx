@@ -884,6 +884,9 @@ function ReportsView({ supabase, claims, auditLogs }) {
   const [month, setMonth] = useState(monthValue());
   const approvedClaims = claims.filter((claim) => claim.status === 'admin_approved');
   const paidClaims = claims.filter((claim) => claim.status === 'paid');
+  const exportableClaims = claims.filter(
+    (claim) => ['admin_approved', 'paid'].includes(claim.status) && claim.incurred_date?.startsWith(month)
+  );
   const totals = useMemo(() => summarizeClaims(claims), [claims]);
 
   async function exportMonth() {
@@ -918,10 +921,14 @@ function ReportsView({ supabase, claims, auditLogs }) {
           <div><p>Monthly export</p><h3>Approved Claims ZIP</h3></div>
           <div className="button-row">
             <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-            <button className="primary-button" onClick={exportMonth}><Download size={18} /> Export</button>
+            <button className="primary-button" onClick={exportMonth} disabled={!exportableClaims.length}><Download size={18} /> Export</button>
           </div>
         </div>
-        <p className="muted">Exports include admin-approved claims only, with CSV data and receipt files grouped by employee.</p>
+        <p className="muted">
+          {exportableClaims.length
+            ? `${exportableClaims.length} admin-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported for ${month}.`
+            : `No admin-approved or paid claims found for ${month}. Choose another month after final approval.`}
+        </p>
       </div>
       <div className="report-grid">
         {totals.map((row) => (

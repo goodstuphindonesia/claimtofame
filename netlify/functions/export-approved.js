@@ -10,16 +10,14 @@ function safeFileName(value) {
   return String(value || 'unknown').replace(/[^a-zA-Z0-9._@-]/g, '-');
 }
 
-function jakartaMonthRange(month) {
-  const [year, monthNumber] = month.split('-').map(Number);
+function monthDateRange(month) {
+  const startDate = `${month}-01`;
+  const end = new Date(`${month}-01T00:00:00Z`);
+  end.setUTCMonth(end.getUTCMonth() + 1);
   return {
-    startIso: new Date(Date.UTC(year, monthNumber - 1, 1, -7, 0, 0)).toISOString(),
-    endIso: new Date(Date.UTC(year, monthNumber, 1, -7, 0, 0)).toISOString(),
+    startDate,
+    endDate: end.toISOString().slice(0, 10),
   };
-}
-
-function dateIsInMonth(value, month) {
-  return String(value || '').slice(0, 7) === month;
 }
 
 async function loadReceiptRecords(supabase, claim) {
@@ -45,28 +43,9 @@ export async function handler(event) {
     return { statusCode: 400, body: 'Use month=YYYY-MM.' };
   }
 
-  const { startIso, endIso } = jakartaMonthRange(month);
+  const { startDate, endDate } = monthDateRange(month);
 
-  const { data: approvalEvents, error: eventError } = await supabase
-    .from('approval_events')
-    .select('claim_id,created_at')
-    .eq('action', 'admin_approved')
-    .gte('created_at', startIso)
-    .lt('created_at', endIso)
-    .order('created_at', { ascending: true });
-
-  if (eventError) return { statusCode: 500, body: eventError.message };
-
-  const approvedAtByClaimId = new Map();
-  const approvalEventClaimIds = new Set();
-  for (const approvalEvent of approvalEvents || []) {
-    if (!approvedAtByClaimId.has(approvalEvent.claim_id)) {
-      approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
-    }
-    approvalEventClaimIds.add(approvalEvent.claim_id);
-  }
-
-  const { data: approvedClaims, error } = await supabase
+  const { data: claims, error } = await supabase
     .from('claims')
     .select(`
       *,
@@ -75,40 +54,44 @@ export async function handler(event) {
       receipts:claim_receipts(file_name,file_path)
     `)
     .in('status', ['admin_approved', 'paid'])
+    .gte('incurred_date', startDate)
+    .lt('incurred_date', endDate)
     .order('incurred_date', { ascending: true });
 
   if (error) return { statusCode: 500, body: error.message };
 
+  if (!claims?.length) {
+    return {
+      statusCode: 404,
+      body: `No admin-approved or paid claims found for ${month}. Choose a month with approved claims.`,
+    };
+  }
+
+  const claimIds = claims.map((claim) => claim.id);
+  const { data: approvalEvents, error: eventError } = await supabase
+    .from('approval_events')
+    .select('claim_id,created_at')
+    .eq('action', 'admin_approved')
+    .in('claim_id', claimIds)
+    .order('created_at', { ascending: true });
+
+  if (eventError) return { statusCode: 500, body: eventError.message };
+
+  const approvedAtByClaimId = new Map();
+  for (const approvalEvent of approvalEvents || []) {
+    if (!approvedAtByClaimId.has(approvalEvent.claim_id)) {
+      approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
+    }
+  }
+
   const exportSummary = {
     requested_month: month,
-    approved_or_paid_claims_found: approvedClaims?.length || 0,
-    matched_by_admin_approval_event: 0,
-    matched_by_expense_month: 0,
-    matched_by_latest_update_month: 0,
-    exported_claims: 0,
+    month_rule: 'incurred_date is within selected month',
+    exported_claims: claims.length,
+    receipt_files_found: 0,
+    receipt_files_exported: 0,
+    receipt_files_missing: 0,
   };
-
-  const claims = (approvedClaims || []).filter((claim) => {
-    const matchedByApprovalEvent = approvalEventClaimIds.has(claim.id);
-    const matchedByExpenseMonth = dateIsInMonth(claim.incurred_date, month);
-    const matchedByUpdatedMonth = dateIsInMonth(claim.updated_at, month);
-
-    if (matchedByApprovalEvent) exportSummary.matched_by_admin_approval_event += 1;
-    if (matchedByExpenseMonth) exportSummary.matched_by_expense_month += 1;
-    if (matchedByUpdatedMonth) exportSummary.matched_by_latest_update_month += 1;
-
-    if (!approvedAtByClaimId.has(claim.id) && matchedByUpdatedMonth) {
-      approvedAtByClaimId.set(claim.id, claim.updated_at);
-    }
-
-    return matchedByApprovalEvent || matchedByExpenseMonth || matchedByUpdatedMonth;
-  });
-
-  exportSummary.exported_claims = claims.length;
-
-  if (!claims.length && approvedClaims?.length) {
-    exportSummary.note = 'Approved or paid claims exist, but none matched the selected month by Admin approval event, expense date, or latest update.';
-  }
 
   const zip = new JSZip();
   const headers = [
@@ -134,6 +117,7 @@ export async function handler(event) {
     const employee = safeFileName(claim.claimant?.email);
     const receiptNames = [];
     const receipts = await loadReceiptRecords(supabase, claim);
+    exportSummary.receipt_files_found += receipts.length;
 
     for (const receipt of receipts) {
       const amount = String(claim.amount).replace('.', '-');
@@ -144,8 +128,10 @@ export async function handler(event) {
       if (fileData) {
         const buffer = Buffer.from(await fileData.arrayBuffer());
         zip.file(`receipts/${employee}/${targetName}`, buffer);
+        exportSummary.receipt_files_exported += 1;
       } else {
         missingReceipts.push(`${claim.id}: ${receipt.file_name}${downloadError ? ` (${downloadError.message})` : ''}`);
+        exportSummary.receipt_files_missing += 1;
       }
     }
 
@@ -158,7 +144,7 @@ export async function handler(event) {
       claim.amount,
       claim.currency,
       claim.incurred_date,
-      approvedAtByClaimId.get(claim.id),
+      approvedAtByClaimId.get(claim.id) || '',
       claim.job_no,
       claim.business_purpose,
       claim.status,
