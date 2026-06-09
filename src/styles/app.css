@@ -694,11 +694,29 @@ button:disabled {
 
 .settings-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 150px minmax(180px, 1fr) 88px;
-  gap: 10px;
+  grid-template-columns: minmax(260px, 1fr) 150px minmax(180px, 1fr) 88px;
+  gap: 18px;
   align-items: center;
-  padding: 12px 0;
+  padding: 18px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-identity {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-identity strong {
+  display: block;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.user-identity span {
+  display: block;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .invite-form {

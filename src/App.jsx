@@ -1173,7 +1173,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
           {settingsMessage && <div className="notice">{settingsMessage}</div>}
           {users.map((user) => (
             <div className="settings-row" key={user.id}>
-              <div>
+              <div className="user-identity">
                 <strong>{user.full_name || user.email}</strong>
                 <span>{user.email}</span>
               </div>
