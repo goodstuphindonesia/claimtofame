@@ -694,8 +694,8 @@ button:disabled {
 
 .settings-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 150px minmax(180px, 1fr) 88px;
-  gap: 18px;
+  grid-template-columns: minmax(220px, 1fr) 150px minmax(170px, 0.8fr) 92px 112px;
+  gap: 14px;
   align-items: center;
   padding: 18px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -721,9 +721,18 @@ button:disabled {
 
 .invite-form {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin: 14px 0 18px;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.4fr) minmax(160px, 0.7fr);
+  gap: 14px;
+  align-items: end;
+  margin: 18px 0 22px;
+}
+
+.invite-email {
+  grid-column: span 2;
+}
+
+.invite-submit {
+  min-width: 142px;
 }
 
 .settings-row:last-child {

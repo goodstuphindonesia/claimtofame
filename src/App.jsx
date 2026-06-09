@@ -1120,6 +1120,26 @@ function SettingsView({ supabase, users, categories, onChanged }) {
     onChanged();
   }
 
+  async function deleteUser(user) {
+    if (!confirm(`Permanently delete ${user.full_name || user.email}? This removes their login account.`)) return;
+    setSettingsMessage('');
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch('/.netlify/functions/invite-user', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${data.session?.access_token || ''}`,
+      },
+      body: JSON.stringify({ id: user.id }),
+    });
+    if (!response.ok) {
+      setSettingsMessage(await response.text());
+      return;
+    }
+    setSettingsMessage('User deleted.');
+    onChanged();
+  }
+
   async function addCategory() {
     if (!newCategory.trim()) return;
     await supabase.from('claim_categories').insert({ name: newCategory.trim() });
@@ -1157,18 +1177,30 @@ function SettingsView({ supabase, users, categories, onChanged }) {
         <div className="report-panel">
           <div className="section-heading"><div><p>People</p><h3>Users and Managers</h3></div></div>
           <form className="invite-form" onSubmit={inviteUser}>
-            <input required placeholder="Full name" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} />
-            <input required type="email" placeholder="name@goodstuph.org" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} />
-            <select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
-              {Object.entries(ROLES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <select value={invite.manager_id} onChange={(e) => setInvite({ ...invite, manager_id: e.target.value })}>
-              <option value="">No manager</option>
-              {users.filter((item) => item.role === 'manager' || item.role === 'super_admin').map((manager) => (
-                <option key={manager.id} value={manager.id}>{manager.full_name || manager.email}</option>
-              ))}
-            </select>
-            <button className="primary-button" type="submit"><Plus size={18} /> Invite</button>
+            <label>
+              Full name
+              <input required placeholder="Full name" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} />
+            </label>
+            <label className="invite-email">
+              Email
+              <input required type="email" placeholder="name@goodstuph.org" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} />
+            </label>
+            <label>
+              Role
+              <select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+                {Object.entries(ROLES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              Manager
+              <select value={invite.manager_id} onChange={(e) => setInvite({ ...invite, manager_id: e.target.value })}>
+                <option value="">No manager</option>
+                {users.filter((item) => item.role === 'manager' || item.role === 'super_admin').map((manager) => (
+                  <option key={manager.id} value={manager.id}>{manager.full_name || manager.email}</option>
+                ))}
+              </select>
+            </label>
+            <button className="primary-button invite-submit" type="submit"><Plus size={18} /> Invite</button>
           </form>
           {settingsMessage && <div className="notice">{settingsMessage}</div>}
           {users.map((user) => (
@@ -1190,6 +1222,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
                 <input type="checkbox" checked={user.is_active} onChange={(e) => updateUser(user, { is_active: e.target.checked })} />
                 Active
               </label>
+              <button className="danger-button" type="button" onClick={() => deleteUser(user)}><Trash2 size={16} /> Delete</button>
             </div>
           ))}
         </div>
