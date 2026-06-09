@@ -1240,7 +1240,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
         </div>
         <div className="report-panel">
           <div className="section-heading"><div><p>Categories</p><h3>Claim Categories</h3></div></div>
-          <div className="button-row">
+          <div className="category-add-row">
             <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="New category" />
             <button className="primary-button" onClick={addCategory}><Plus size={18} /> Add</button>
           </div>

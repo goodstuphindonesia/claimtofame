@@ -530,7 +530,7 @@ textarea {
 }
 
 .settings-grid {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(520px, 1.15fr) minmax(360px, 0.85fr);
   align-items: start;
 }
 
@@ -694,7 +694,7 @@ button:disabled {
 
 .settings-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 150px minmax(170px, 0.8fr) 92px 112px;
+  grid-template-columns: minmax(180px, 1fr) minmax(136px, 0.62fr) minmax(150px, 0.72fr) auto auto;
   gap: 14px;
   align-items: center;
   padding: 18px 0;
@@ -703,7 +703,7 @@ button:disabled {
 
 .category-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 92px 112px;
+  grid-template-columns: minmax(170px, 1fr) auto auto;
   gap: 14px;
   align-items: center;
   padding: 18px 0;
@@ -730,7 +730,7 @@ button:disabled {
 
 .invite-form {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.4fr) minmax(160px, 0.7fr);
+  grid-template-columns: minmax(180px, 0.9fr) minmax(260px, 1.4fr) minmax(140px, 0.7fr);
   gap: 14px;
   align-items: end;
   margin: 18px 0 22px;
@@ -742,6 +742,21 @@ button:disabled {
 
 .invite-submit {
   min-width: 142px;
+}
+
+.category-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.settings-row .danger-button,
+.category-row .danger-button,
+.category-add-row .primary-button {
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .settings-row:last-child,
@@ -804,6 +819,42 @@ summary {
 
 summary::marker {
   color: var(--orange-2);
+}
+
+@media (max-width: 1280px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.65fr) minmax(180px, 0.8fr) auto auto;
+  }
+
+  .invite-form {
+    grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.4fr);
+  }
+
+  .invite-email {
+    grid-column: span 1;
+  }
+
+  .invite-submit {
+    width: fit-content;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-row,
+  .category-row,
+  .category-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-row .danger-button,
+  .category-row .danger-button,
+  .category-add-row .primary-button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 920px) {
