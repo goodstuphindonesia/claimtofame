@@ -1152,6 +1152,18 @@ function SettingsView({ supabase, users, categories, onChanged }) {
     onChanged();
   }
 
+  async function deleteCategory(category) {
+    if (!confirm(`Delete "${category.name}" from claim categories?`)) return;
+    setSettingsMessage('');
+    const { error } = await supabase.from('claim_categories').delete().eq('id', category.id);
+    if (error) {
+      setSettingsMessage('This category cannot be deleted because it is already used by existing claims. You can turn it inactive instead.');
+      return;
+    }
+    setSettingsMessage('Category deleted.');
+    onChanged();
+  }
+
   async function inviteUser(event) {
     event.preventDefault();
     const { data } = await supabase.auth.getSession();
@@ -1233,12 +1245,13 @@ function SettingsView({ supabase, users, categories, onChanged }) {
             <button className="primary-button" onClick={addCategory}><Plus size={18} /> Add</button>
           </div>
           {categories.map((category) => (
-            <div className="settings-row" key={category.id}>
+            <div className="category-row" key={category.id}>
               <input value={category.name} onChange={(e) => updateCategory(category, { name: e.target.value })} />
               <label className="toggle">
                 <input type="checkbox" checked={category.is_active} onChange={(e) => updateCategory(category, { is_active: e.target.checked })} />
                 Active
               </label>
+              <button className="danger-button" type="button" onClick={() => deleteCategory(category)}><Trash2 size={16} /> Delete</button>
             </div>
           ))}
           <div className="notice">

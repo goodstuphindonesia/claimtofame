@@ -701,6 +701,15 @@ button:disabled {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.category-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 92px 112px;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .user-identity {
   display: grid;
   gap: 8px;
@@ -735,7 +744,8 @@ button:disabled {
   min-width: 142px;
 }
 
-.settings-row:last-child {
+.settings-row:last-child,
+.category-row:last-child {
   border-bottom: 0;
 }
 
@@ -819,7 +829,8 @@ summary::marker {
     grid-template-columns: 1fr;
   }
 
-  .settings-row {
+  .settings-row,
+  .category-row {
     grid-template-columns: 1fr;
   }
 
