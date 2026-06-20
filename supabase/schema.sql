@@ -230,6 +230,19 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'claim-exports',
+  'claim-exports',
+  false,
+  104857600,
+  array['application/zip']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 alter table public.profiles enable row level security;
 alter table public.claim_categories enable row level security;
 alter table public.claims enable row level security;

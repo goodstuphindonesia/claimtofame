@@ -10,6 +10,8 @@ function safeFileName(value) {
   return String(value || 'unknown').replace(/[^a-zA-Z0-9._@-]/g, '-');
 }
 
+const EXPORT_BUCKET = 'claim-exports';
+
 function monthDateRange(month) {
   const startDate = `${month}-01`;
   const end = new Date(`${month}-01T00:00:00Z`);
@@ -18,6 +20,18 @@ function monthDateRange(month) {
     startDate,
     endDate: end.toISOString().slice(0, 10),
   };
+}
+
+async function ensureExportBucket(supabase) {
+  const { error } = await supabase.storage.createBucket(EXPORT_BUCKET, {
+    public: false,
+    fileSizeLimit: 100 * 1024 * 1024,
+    allowedMimeTypes: ['application/zip'],
+  });
+
+  if (error && !/already exists|duplicate/i.test(error.message || '')) {
+    throw error;
+  }
 }
 
 async function loadReceiptRecords(supabase, claim) {
@@ -164,14 +178,33 @@ export async function handler(event) {
     after_values: { month, count: claims?.length || 0 },
   });
 
-  const body = await zip.generateAsync({ type: 'base64' });
+  const fileName = `GOODSTUPH-approved-claims-${month}.zip`;
+  const exportPath = `${month}/${Date.now()}-${fileName}`;
+  const archive = await zip.generateAsync({ type: 'nodebuffer' });
+
+  try {
+    await ensureExportBucket(supabase);
+  } catch (bucketError) {
+    return { statusCode: 500, body: `Could not create the export storage bucket: ${bucketError.message}` };
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from(EXPORT_BUCKET)
+    .upload(exportPath, archive, { contentType: 'application/zip' });
+
+  if (uploadError) return { statusCode: 500, body: `Could not save the export ZIP: ${uploadError.message}` };
+
+  const { data: signedData, error: signedUrlError } = await supabase.storage
+    .from(EXPORT_BUCKET)
+    .createSignedUrl(exportPath, 600, { download: fileName });
+
+  if (signedUrlError) return { statusCode: 500, body: `Could not create the export download link: ${signedUrlError.message}` };
+
   return {
     statusCode: 200,
-    isBase64Encoded: true,
     headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="GOODSTUPH-approved-claims-${month}.zip"`,
+      'Content-Type': 'application/json',
     },
-    body,
+    body: JSON.stringify({ downloadUrl: signedData.signedUrl, fileName }),
   };
 }

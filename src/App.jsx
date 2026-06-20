@@ -1030,13 +1030,15 @@ function ReportsView({ supabase, claims, auditLogs }) {
       alert(await response.text());
       return;
     }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    const { downloadUrl, fileName } = await response.json();
+    if (!downloadUrl) {
+      alert('The export completed, but no download link was returned.');
+      return;
+    }
     const link = document.createElement('a');
-    link.href = url;
-    link.download = `GOODSTUPH-approved-claims-${month}.zip`;
+    link.href = downloadUrl;
+    link.download = fileName || `GOODSTUPH-approved-claims-${month}.zip`;
     link.click();
-    URL.revokeObjectURL(url);
   }
 
   return (
