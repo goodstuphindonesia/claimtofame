@@ -25,7 +25,6 @@ function monthDateRange(month) {
 async function ensureExportBucket(supabase) {
   const { error } = await supabase.storage.createBucket(EXPORT_BUCKET, {
     public: false,
-    fileSizeLimit: 100 * 1024 * 1024,
     allowedMimeTypes: ['application/zip'],
   });
 

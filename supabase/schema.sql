@@ -235,7 +235,7 @@ values (
   'claim-exports',
   'claim-exports',
   false,
-  104857600,
+  null,
   array['application/zip']
 )
 on conflict (id) do update set
