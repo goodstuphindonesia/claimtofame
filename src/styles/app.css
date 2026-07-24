@@ -493,6 +493,17 @@ textarea {
   flex-wrap: wrap;
 }
 
+.date-field {
+  min-width: 170px;
+}
+
+.date-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .filters {
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -926,6 +937,10 @@ summary::marker {
   }
 
   .button-row button {
+    width: 100%;
+  }
+
+  .date-field {
     width: 100%;
   }
 }

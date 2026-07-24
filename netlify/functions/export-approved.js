@@ -12,14 +12,14 @@ function safeFileName(value) {
 
 const EXPORT_BUCKET = 'claim-exports';
 
-function monthDateRange(month) {
-  const startDate = `${month}-01`;
-  const end = new Date(`${month}-01T00:00:00Z`);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  return {
-    startDate,
-    endDate: end.toISOString().slice(0, 10),
-  };
+function isDateValue(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+}
+
+function nextDateValue(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 async function ensureExportBucket(supabase) {
@@ -51,12 +51,19 @@ export async function handler(event) {
   const auth = await requireSuperAdmin(event, supabase);
   if (auth.error) return { statusCode: auth.status, body: auth.error };
 
-  const month = event.queryStringParameters?.month;
-  if (!/^\d{4}-\d{2}$/.test(month || '')) {
-    return { statusCode: 400, body: 'Use month=YYYY-MM.' };
+  const startDate = event.queryStringParameters?.startDate;
+  const endDate = event.queryStringParameters?.endDate;
+
+  if (!isDateValue(startDate) || !isDateValue(endDate)) {
+    return { statusCode: 400, body: 'Use startDate=YYYY-MM-DD and endDate=YYYY-MM-DD.' };
   }
 
-  const { startDate, endDate } = monthDateRange(month);
+  if (startDate > endDate) {
+    return { statusCode: 400, body: 'Start date must be before or equal to end date.' };
+  }
+
+  const exclusiveEndDate = nextDateValue(endDate);
+  const rangeLabel = `${startDate}-to-${endDate}`;
 
   const { data: claims, error } = await supabase
     .from('claims')
@@ -68,7 +75,7 @@ export async function handler(event) {
     `)
     .in('status', ['admin_approved', 'paid'])
     .gte('incurred_date', startDate)
-    .lt('incurred_date', endDate)
+    .lt('incurred_date', exclusiveEndDate)
     .order('incurred_date', { ascending: true });
 
   if (error) return { statusCode: 500, body: error.message };
@@ -76,7 +83,7 @@ export async function handler(event) {
   if (!claims?.length) {
     return {
       statusCode: 404,
-      body: `No admin-approved or paid claims found for ${month}. Choose a month with approved claims.`,
+      body: `No admin-approved or paid claims found from ${startDate} to ${endDate}. Choose a date range with approved claims.`,
     };
   }
 
@@ -98,8 +105,9 @@ export async function handler(event) {
   }
 
   const exportSummary = {
-    requested_month: month,
-    month_rule: 'incurred_date is within selected month',
+    requested_start_date: startDate,
+    requested_end_date: endDate,
+    date_range_rule: 'incurred_date is within selected date range, inclusive',
     exported_claims: claims.length,
     receipt_files_found: 0,
     receipt_files_exported: 0,
@@ -174,11 +182,11 @@ export async function handler(event) {
   await supabase.from('audit_logs').insert({
     actor_id: auth.profile.id,
     action: 'claims_exported',
-    after_values: { month, count: claims?.length || 0 },
+    after_values: { startDate, endDate, count: claims?.length || 0 },
   });
 
-  const fileName = `GOODSTUPH-approved-claims-${month}.zip`;
-  const exportPath = `${month}/${Date.now()}-${fileName}`;
+  const fileName = `GOODSTUPH-approved-claims-${rangeLabel}.zip`;
+  const exportPath = `${rangeLabel}/${Date.now()}-${fileName}`;
   const archive = await zip.generateAsync({ type: 'nodebuffer' });
 
   try {

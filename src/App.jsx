@@ -28,7 +28,7 @@ import {
   ROLES,
   STATUS_LABELS,
 } from './lib/constants.js';
-import { formatDate, formatMoney, monthValue } from './lib/format.js';
+import { dateValue, formatDate, formatMoney, monthValue } from './lib/format.js';
 import { getSupabaseClient } from './lib/supabase.js';
 
 const emptyClaim = {
@@ -1011,17 +1011,30 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
 }
 
 function ReportsView({ supabase, claims, auditLogs }) {
-  const [month, setMonth] = useState(monthValue());
+  const [dateRange, setDateRange] = useState(() => ({
+    startDate: `${monthValue()}-01`,
+    endDate: dateValue(),
+  }));
   const approvedClaims = claims.filter((claim) => claim.status === 'admin_approved');
   const paidClaims = claims.filter((claim) => claim.status === 'paid');
+  const hasDateRange = dateRange.startDate && dateRange.endDate && dateRange.startDate <= dateRange.endDate;
   const exportableClaims = claims.filter(
-    (claim) => ['admin_approved', 'paid'].includes(claim.status) && claim.incurred_date?.startsWith(month)
+    (claim) => ['admin_approved', 'paid'].includes(claim.status)
+      && hasDateRange
+      && claim.incurred_date >= dateRange.startDate
+      && claim.incurred_date <= dateRange.endDate
   );
   const totals = useMemo(() => summarizeClaims(claims), [claims]);
 
-  async function exportMonth() {
+  async function exportDateRange() {
+    if (!hasDateRange) {
+      alert('Choose a valid start and end date before exporting.');
+      return;
+    }
+
     const { data } = await supabase.auth.getSession();
-    const response = await fetch(`/.netlify/functions/export-approved?month=${month}`, {
+    const params = new URLSearchParams(dateRange);
+    const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${data.session?.access_token || ''}`,
       },
@@ -1037,7 +1050,7 @@ function ReportsView({ supabase, claims, auditLogs }) {
     }
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = fileName || `GOODSTUPH-approved-claims-${month}.zip`;
+    link.download = fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`;
     link.click();
   }
 
@@ -1050,16 +1063,33 @@ function ReportsView({ supabase, claims, auditLogs }) {
       </div>
       <div className="report-panel">
         <div className="section-heading">
-          <div><p>Monthly export</p><h3>Approved Claims ZIP</h3></div>
+          <div><p>Date range export</p><h3>Approved Claims ZIP</h3></div>
           <div className="button-row">
-            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-            <button className="primary-button" onClick={exportMonth} disabled={!exportableClaims.length}><Download size={18} /> Export</button>
+            <label className="date-field">
+              <span>From</span>
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange((current) => ({ ...current, startDate: e.target.value }))}
+              />
+            </label>
+            <label className="date-field">
+              <span>To</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange((current) => ({ ...current, endDate: e.target.value }))}
+              />
+            </label>
+            <button className="primary-button" onClick={exportDateRange} disabled={!exportableClaims.length || !hasDateRange}><Download size={18} /> Export</button>
           </div>
         </div>
         <p className="muted">
-          {exportableClaims.length
-            ? `${exportableClaims.length} admin-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported for ${month}.`
-            : `No admin-approved or paid claims found for ${month}. Choose another month after final approval.`}
+          {!hasDateRange
+            ? 'Choose a valid start and end date to export approved claims.'
+            : exportableClaims.length
+              ? `${exportableClaims.length} admin-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}.`
+              : `No admin-approved or paid claims found from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}. Choose another date range after final approval.`}
         </p>
       </div>
       <div className="report-grid">

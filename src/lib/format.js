@@ -18,6 +18,10 @@ export function monthValue(date = new Date()) {
   return format(date, 'yyyy-MM');
 }
 
+export function dateValue(date = new Date()) {
+  return format(date, 'yyyy-MM-dd');
+}
+
 export function humanStatus(status, labels) {
   return labels[status] || status;
 }
