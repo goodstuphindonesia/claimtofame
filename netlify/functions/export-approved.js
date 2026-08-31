@@ -16,6 +16,10 @@ function isDateValue(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
 }
 
+function isUuidValue(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+}
+
 function nextDateValue(value) {
   const date = new Date(`${value}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + 1);
@@ -53,9 +57,14 @@ export async function handler(event) {
 
   const startDate = event.queryStringParameters?.startDate;
   const endDate = event.queryStringParameters?.endDate;
+  const claimantId = event.queryStringParameters?.claimantId || '';
 
   if (!isDateValue(startDate) || !isDateValue(endDate)) {
     return { statusCode: 400, body: 'Use startDate=YYYY-MM-DD and endDate=YYYY-MM-DD.' };
+  }
+
+  if (claimantId && !isUuidValue(claimantId)) {
+    return { statusCode: 400, body: 'Use a valid claimantId.' };
   }
 
   if (startDate > endDate) {
@@ -63,9 +72,10 @@ export async function handler(event) {
   }
 
   const exclusiveEndDate = nextDateValue(endDate);
-  const rangeLabel = `${startDate}-to-${endDate}`;
+  const claimantLabel = claimantId ? `-${safeFileName(claimantId)}` : '';
+  const rangeLabel = `${startDate}-to-${endDate}${claimantLabel}`;
 
-  const { data: claims, error } = await supabase
+  let claimQuery = supabase
     .from('claims')
     .select(`
       *,
@@ -77,6 +87,12 @@ export async function handler(event) {
     .gte('incurred_date', startDate)
     .lt('incurred_date', exclusiveEndDate)
     .order('incurred_date', { ascending: true });
+
+  if (claimantId) {
+    claimQuery = claimQuery.eq('claimant_id', claimantId);
+  }
+
+  const { data: claims, error } = await claimQuery;
 
   if (error) return { statusCode: 500, body: error.message };
 
@@ -107,6 +123,7 @@ export async function handler(event) {
   const exportSummary = {
     requested_start_date: startDate,
     requested_end_date: endDate,
+    requested_claimant_id: claimantId || null,
     date_range_rule: 'incurred_date is within selected date range, inclusive',
     exported_claims: claims.length,
     receipt_files_found: 0,

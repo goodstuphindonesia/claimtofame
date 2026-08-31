@@ -253,11 +253,12 @@ function ClaimApp() {
             profile={profile}
             managerQueue={managerQueue}
             adminQueue={adminQueue}
+            users={users}
             onChanged={refresh}
             isSuperAdmin={isSuperAdmin}
           />
         )}
-        {activeView === 'reports' && isSuperAdmin && <ReportsView supabase={supabase} claims={claims} auditLogs={auditLogs} />}
+        {activeView === 'reports' && isSuperAdmin && <ReportsView supabase={supabase} claims={claims} users={users} auditLogs={auditLogs} />}
         {activeView === 'settings' && isSuperAdmin && (
           <SettingsView supabase={supabase} users={users} categories={categories} onChanged={refresh} />
         )}
@@ -281,7 +282,7 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
   const [form, setForm] = useState(emptyClaim);
   const [files, setFiles] = useState([]);
   const [editing, setEditing] = useState(null);
-  const [filters, setFilters] = useState({ search: '', status: '', category: '', month: '' });
+  const [filters, setFilters] = useState({ search: '', status: '', category: '', month: '', claimantId: '' });
   const [formError, setFormError] = useState('');
   const [selectedDraftIds, setSelectedDraftIds] = useState([]);
 
@@ -291,7 +292,8 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
     const matchesStatus = !filters.status || claim.status === filters.status;
     const matchesCategory = !filters.category || claim.category_id === filters.category;
     const matchesMonth = !filters.month || claim.incurred_date?.startsWith(filters.month);
-    return matchesSearch && matchesStatus && matchesCategory && matchesMonth;
+    const matchesClaimant = !filters.claimantId || claim.claimant_id === filters.claimantId;
+    return matchesSearch && matchesStatus && matchesCategory && matchesMonth && matchesClaimant;
   });
   const ownClaims = claims.filter((claim) => claim.claimant_id === profile.id);
   const bulkDraftClaims = filtered.filter((claim) => claim.status === 'draft' && (isSuperAdmin || claim.claimant_id === profile.id));
@@ -602,7 +604,13 @@ function ClaimsView({ supabase, profile, categories, claims, users, onChanged, i
         {formError && <div className="notice">{formError}</div>}
       </form>
 
-      <ClaimFilters filters={filters} setFilters={setFilters} categories={categories} />
+      <ClaimFilters
+        filters={filters}
+        setFilters={setFilters}
+        categories={categories}
+        users={users}
+        showClaimantFilter={isSuperAdmin}
+      />
 
       {bulkDraftClaims.length > 0 && (
         <section className="draft-section">
@@ -737,7 +745,25 @@ function QuestStat({ icon, label, value }) {
   );
 }
 
-function ClaimFilters({ filters, setFilters, categories }) {
+function claimantLabel(user) {
+  return user.full_name ? `${user.full_name} (${user.email})` : user.email;
+}
+
+function UserSubmissionFilter({ users, value, onChange }) {
+  return (
+    <label>
+      User submission
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">All users</option>
+        {users.map((user) => (
+          <option key={user.id} value={user.id}>{claimantLabel(user)}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ClaimFilters({ filters, setFilters, categories, users = [], showClaimantFilter = false }) {
   return (
     <div className="filters">
       <label className="search-field">
@@ -762,6 +788,13 @@ function ClaimFilters({ filters, setFilters, categories }) {
         Month
         <input type="month" value={filters.month} onChange={(e) => setFilters({ ...filters, month: e.target.value })} />
       </label>
+      {showClaimantFilter && (
+        <UserSubmissionFilter
+          users={users}
+          value={filters.claimantId}
+          onChange={(claimantId) => setFilters({ ...filters, claimantId })}
+        />
+      )}
     </div>
   );
 }
@@ -827,12 +860,26 @@ function ReceiptLinks({ receipts }) {
   ));
 }
 
-function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged, isSuperAdmin }) {
+function ApprovalsView({ supabase, profile, managerQueue, adminQueue, users, onChanged, isSuperAdmin }) {
+  const [claimantFilter, setClaimantFilter] = useState('');
   const [selectedManagerClaimIds, setSelectedManagerClaimIds] = useState([]);
   const [selectedAdminClaimIds, setSelectedAdminClaimIds] = useState([]);
+  const filteredManagerQueue = useMemo(
+    () => managerQueue.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
+    [managerQueue, claimantFilter]
+  );
+  const filteredAdminQueue = useMemo(
+    () => adminQueue.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
+    [adminQueue, claimantFilter]
+  );
 
-  const selectedManagerClaims = managerQueue.filter((claim) => selectedManagerClaimIds.includes(claim.id));
-  const selectedAdminClaims = adminQueue.filter((claim) => selectedAdminClaimIds.includes(claim.id));
+  const selectedManagerClaims = filteredManagerQueue.filter((claim) => selectedManagerClaimIds.includes(claim.id));
+  const selectedAdminClaims = filteredAdminQueue.filter((claim) => selectedAdminClaimIds.includes(claim.id));
+
+  useEffect(() => {
+    setSelectedManagerClaimIds((current) => current.filter((id) => filteredManagerQueue.some((claim) => claim.id === id)));
+    setSelectedAdminClaimIds((current) => current.filter((id) => filteredAdminQueue.some((claim) => claim.id === id)));
+  }, [claimantFilter, filteredManagerQueue, filteredAdminQueue]);
 
   async function act(claim, action, status) {
     const requiresReason = ['rejected', 'needs_changes'].includes(status);
@@ -858,10 +905,10 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
 
   function selectQueue(queue, checked) {
     if (queue === 'manager') {
-      setSelectedManagerClaimIds(checked ? managerQueue.map((claim) => claim.id) : []);
+      setSelectedManagerClaimIds(checked ? filteredManagerQueue.map((claim) => claim.id) : []);
       return;
     }
-    setSelectedAdminClaimIds(checked ? adminQueue.map((claim) => claim.id) : []);
+    setSelectedAdminClaimIds(checked ? filteredAdminQueue.map((claim) => claim.id) : []);
   }
 
   async function bulkApprove(claimsToApprove, action, status, queue) {
@@ -915,18 +962,23 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
 
   return (
     <section className="view-stack">
+      {isSuperAdmin && (
+        <div className="filters">
+          <UserSubmissionFilter users={users} value={claimantFilter} onChange={setClaimantFilter} />
+        </div>
+      )}
       <div className="section-heading"><div><p>Manager queue</p><h3>Claims Waiting for You</h3></div></div>
-      {managerQueue.length > 0 && (
+      {filteredManagerQueue.length > 0 && (
         <div className="approval-bulk-bar">
           <label className="draft-check">
             <input
               type="checkbox"
-              checked={selectedManagerClaims.length === managerQueue.length}
+              checked={selectedManagerClaims.length === filteredManagerQueue.length}
               onChange={(event) => selectQueue('manager', event.target.checked)}
             />
             Select all manager approvals
           </label>
-          <span>{selectedManagerClaims.length} of {managerQueue.length} selected</span>
+          <span>{selectedManagerClaims.length} of {filteredManagerQueue.length} selected</span>
           <button
             type="button"
             className="primary-button"
@@ -938,7 +990,7 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
         </div>
       )}
       <div className="claim-list">
-        {managerQueue.map((claim) => (
+        {filteredManagerQueue.map((claim) => (
           <ClaimCard
             key={claim.id}
             claim={claim}
@@ -956,23 +1008,23 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
             actions={managerActions(claim)}
           />
         ))}
-        {!managerQueue.length && <EmptyState text="No manager approvals waiting." />}
+        {!filteredManagerQueue.length && <EmptyState text="No manager approvals waiting." />}
       </div>
 
       {isSuperAdmin && (
         <>
           <div className="section-heading"><div><p>Super Admin queue</p><h3>Final Approval</h3></div></div>
-          {adminQueue.length > 0 && (
+          {filteredAdminQueue.length > 0 && (
             <div className="approval-bulk-bar">
               <label className="draft-check">
                 <input
                   type="checkbox"
-                  checked={selectedAdminClaims.length === adminQueue.length}
+                  checked={selectedAdminClaims.length === filteredAdminQueue.length}
                   onChange={(event) => selectQueue('admin', event.target.checked)}
                 />
                 Select all final approvals
               </label>
-              <span>{selectedAdminClaims.length} of {adminQueue.length} selected</span>
+              <span>{selectedAdminClaims.length} of {filteredAdminQueue.length} selected</span>
               <button
                 type="button"
                 className="primary-button"
@@ -984,7 +1036,7 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
             </div>
           )}
           <div className="claim-list">
-            {adminQueue.map((claim) => (
+            {filteredAdminQueue.map((claim) => (
               <ClaimCard
                 key={claim.id}
                 claim={claim}
@@ -1002,7 +1054,7 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
                 actions={adminActions(claim)}
               />
             ))}
-            {!adminQueue.length && <EmptyState text="No final approvals waiting." />}
+            {!filteredAdminQueue.length && <EmptyState text="No final approvals waiting." />}
           </div>
         </>
       )}
@@ -1010,21 +1062,26 @@ function ApprovalsView({ supabase, profile, managerQueue, adminQueue, onChanged,
   );
 }
 
-function ReportsView({ supabase, claims, auditLogs }) {
+function ReportsView({ supabase, claims, users, auditLogs }) {
   const [dateRange, setDateRange] = useState(() => ({
     startDate: `${monthValue()}-01`,
     endDate: dateValue(),
   }));
-  const approvedClaims = claims.filter((claim) => claim.status === 'admin_approved');
-  const paidClaims = claims.filter((claim) => claim.status === 'paid');
+  const [claimantFilter, setClaimantFilter] = useState('');
+  const reportClaims = useMemo(
+    () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
+    [claims, claimantFilter]
+  );
+  const approvedClaims = reportClaims.filter((claim) => claim.status === 'admin_approved');
+  const paidClaims = reportClaims.filter((claim) => claim.status === 'paid');
   const hasDateRange = dateRange.startDate && dateRange.endDate && dateRange.startDate <= dateRange.endDate;
-  const exportableClaims = claims.filter(
+  const exportableClaims = reportClaims.filter(
     (claim) => ['admin_approved', 'paid'].includes(claim.status)
       && hasDateRange
       && claim.incurred_date >= dateRange.startDate
       && claim.incurred_date <= dateRange.endDate
   );
-  const totals = useMemo(() => summarizeClaims(claims), [claims]);
+  const totals = useMemo(() => summarizeClaims(reportClaims), [reportClaims]);
 
   async function exportDateRange() {
     if (!hasDateRange) {
@@ -1033,7 +1090,10 @@ function ReportsView({ supabase, claims, auditLogs }) {
     }
 
     const { data } = await supabase.auth.getSession();
-    const params = new URLSearchParams(dateRange);
+    const params = new URLSearchParams({
+      ...dateRange,
+      ...(claimantFilter ? { claimantId: claimantFilter } : {}),
+    });
     const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${data.session?.access_token || ''}`,
@@ -1059,12 +1119,13 @@ function ReportsView({ supabase, claims, auditLogs }) {
       <div className="metric-grid">
         <Metric label="Admin Approved" value={approvedClaims.length} />
         <Metric label="Paid" value={paidClaims.length} />
-        <Metric label="Total Claims" value={claims.length} />
+        <Metric label="Total Claims" value={reportClaims.length} />
       </div>
       <div className="report-panel">
         <div className="section-heading">
           <div><p>Date range export</p><h3>Approved Claims ZIP</h3></div>
           <div className="button-row">
+            <UserSubmissionFilter users={users} value={claimantFilter} onChange={setClaimantFilter} />
             <label className="date-field">
               <span>From</span>
               <input
