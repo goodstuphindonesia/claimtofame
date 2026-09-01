@@ -1068,18 +1068,20 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
     endDate: dateValue(),
   }));
   const [claimantFilter, setClaimantFilter] = useState('');
+  const hasDateRange = dateRange.startDate && dateRange.endDate && dateRange.startDate <= dateRange.endDate;
   const reportClaims = useMemo(
-    () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
-    [claims, claimantFilter]
+    () => claims.filter((claim) => {
+      const claimDate = claim.incurred_date?.slice(0, 10);
+      const matchesClaimant = !claimantFilter || claim.claimant_id === claimantFilter;
+      const matchesDateRange = hasDateRange && claimDate >= dateRange.startDate && claimDate <= dateRange.endDate;
+      return matchesClaimant && matchesDateRange;
+    }),
+    [claims, claimantFilter, dateRange.startDate, dateRange.endDate, hasDateRange]
   );
   const approvedClaims = reportClaims.filter((claim) => claim.status === 'admin_approved');
   const paidClaims = reportClaims.filter((claim) => claim.status === 'paid');
-  const hasDateRange = dateRange.startDate && dateRange.endDate && dateRange.startDate <= dateRange.endDate;
   const exportableClaims = reportClaims.filter(
     (claim) => ['admin_approved', 'paid'].includes(claim.status)
-      && hasDateRange
-      && claim.incurred_date >= dateRange.startDate
-      && claim.incurred_date <= dateRange.endDate
   );
   const totals = useMemo(() => summarizeClaims(reportClaims), [reportClaims]);
 
