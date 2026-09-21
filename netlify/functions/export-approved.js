@@ -11,6 +11,8 @@ function safeFileName(value) {
 }
 
 const EXPORT_BUCKET = 'claim-exports';
+const EXPORT_PART_LIMIT_BYTES = 42 * 1024 * 1024;
+const FALLBACK_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 function isDateValue(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
@@ -47,7 +49,28 @@ async function loadReceiptRecords(supabase, claim) {
   return files.map((file) => ({
     file_name: file.name,
     file_path: `${folder}/${file.name}`,
+    file_size: file.metadata?.size || file.size || FALLBACK_RECEIPT_BYTES,
   }));
+}
+
+function splitIntoChunks(items) {
+  const chunks = [];
+  let current = [];
+  let currentSize = 0;
+
+  for (const item of items) {
+    const itemSize = Math.max(item.estimatedSize, 1);
+    if (current.length && currentSize + itemSize > EXPORT_PART_LIMIT_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentSize = 0;
+    }
+    current.push(item);
+    currentSize += itemSize;
+  }
+
+  if (current.length) chunks.push(current);
+  return chunks;
 }
 
 export async function handler(event) {
@@ -81,7 +104,7 @@ export async function handler(event) {
       *,
       claimant:profiles!claims_claimant_id_fkey(full_name,email),
       category:claim_categories(name),
-      receipts:claim_receipts(file_name,file_path)
+      receipts:claim_receipts(file_name,file_path,file_size)
     `)
     .in('status', ['admin_approved', 'paid'])
     .gte('incurred_date', startDate)
@@ -131,7 +154,6 @@ export async function handler(event) {
     receipt_files_missing: 0,
   };
 
-  const zip = new JSZip();
   const headers = [
     'claim_id',
     'employee_name',
@@ -148,32 +170,26 @@ export async function handler(event) {
     'receipt_files',
   ];
 
-  const rows = [headers.map(csvEscape).join(',')];
-  const missingReceipts = [];
+  const exportItems = [];
 
   for (const claim of claims || []) {
     const employee = safeFileName(claim.claimant?.email);
     const receiptNames = [];
     const receipts = await loadReceiptRecords(supabase, claim);
     exportSummary.receipt_files_found += receipts.length;
-
-    for (const receipt of receipts) {
+    const receiptItems = receipts.map((receipt) => {
       const amount = String(claim.amount).replace('.', '-');
       const targetName = `${safeFileName(claim.claimant?.email)}-${claim.incurred_date}-${amount}-${safeFileName(receipt.file_name)}`;
-      receiptNames.push(`receipts/${employee}/${targetName}`);
+      const archivePath = `receipts/${employee}/${targetName}`;
+      receiptNames.push(archivePath);
+      return {
+        ...receipt,
+        archivePath,
+        estimatedSize: Number(receipt.file_size || FALLBACK_RECEIPT_BYTES),
+      };
+    });
 
-      const { data: fileData, error: downloadError } = await supabase.storage.from('claim-receipts').download(receipt.file_path);
-      if (fileData) {
-        const buffer = Buffer.from(await fileData.arrayBuffer());
-        zip.file(`receipts/${employee}/${targetName}`, buffer);
-        exportSummary.receipt_files_exported += 1;
-      } else {
-        missingReceipts.push(`${claim.id}: ${receipt.file_name}${downloadError ? ` (${downloadError.message})` : ''}`);
-        exportSummary.receipt_files_missing += 1;
-      }
-    }
-
-    rows.push([
+    const row = [
       claim.id,
       claim.claimant?.full_name,
       claim.claimant?.email,
@@ -187,24 +203,15 @@ export async function handler(event) {
       claim.business_purpose,
       claim.status,
       receiptNames.join('; '),
-    ].map(csvEscape).join(','));
+    ].map(csvEscape).join(',');
+
+    exportItems.push({
+      claimId: claim.id,
+      row,
+      receipts: receiptItems,
+      estimatedSize: receiptItems.reduce((sum, receipt) => sum + receipt.estimatedSize, 0),
+    });
   }
-
-  zip.file('claims.csv', rows.join('\n'));
-  zip.file('export-summary.json', JSON.stringify(exportSummary, null, 2));
-  if (missingReceipts.length) {
-    zip.file('missing-receipts.txt', missingReceipts.join('\n'));
-  }
-
-  await supabase.from('audit_logs').insert({
-    actor_id: auth.profile.id,
-    action: 'claims_exported',
-    after_values: { startDate, endDate, claimantId: claimantId || null, count: claims?.length || 0 },
-  });
-
-  const fileName = `GOODSTUPH-approved-claims-${rangeLabel}.zip`;
-  const exportPath = `${rangeLabel}/${Date.now()}-${fileName}`;
-  const archive = await zip.generateAsync({ type: 'nodebuffer' });
 
   try {
     await ensureExportBucket(supabase);
@@ -212,17 +219,94 @@ export async function handler(event) {
     return { statusCode: 500, body: `Could not create the export storage bucket: ${bucketError.message}` };
   }
 
-  const { error: uploadError } = await supabase.storage
-    .from(EXPORT_BUCKET)
-    .upload(exportPath, archive, { contentType: 'application/zip' });
+  const chunks = splitIntoChunks(exportItems);
+  const downloads = [];
+  const missingReceipts = [];
 
-  if (uploadError) return { statusCode: 500, body: `Could not save the export ZIP: ${uploadError.message}` };
+  for (const [index, chunk] of chunks.entries()) {
+    const zip = new JSZip();
+    const rows = [headers.map(csvEscape).join(','), ...chunk.map((item) => item.row)];
+    const chunkMissingReceipts = [];
+    const chunkSummary = {
+      requested_start_date: startDate,
+      requested_end_date: endDate,
+      requested_claimant_id: claimantId || null,
+      date_range_rule: 'incurred_date is within selected date range, inclusive',
+      part: index + 1,
+      total_parts: chunks.length,
+      exported_claims: chunk.length,
+      receipt_files_found: chunk.reduce((sum, item) => sum + item.receipts.length, 0),
+      receipt_files_exported: 0,
+      receipt_files_missing: 0,
+    };
 
-  const { data: signedData, error: signedUrlError } = await supabase.storage
-    .from(EXPORT_BUCKET)
-    .createSignedUrl(exportPath, 600, { download: fileName });
+    for (const item of chunk) {
+      for (const receipt of item.receipts) {
+        const { data: fileData, error: downloadError } = await supabase.storage.from('claim-receipts').download(receipt.file_path);
+        if (fileData) {
+          const buffer = Buffer.from(await fileData.arrayBuffer());
+          zip.file(receipt.archivePath, buffer);
+          exportSummary.receipt_files_exported += 1;
+          chunkSummary.receipt_files_exported += 1;
+        } else {
+          const missingReceipt = `${item.claimId}: ${receipt.file_name}${downloadError ? ` (${downloadError.message})` : ''}`;
+          missingReceipts.push(missingReceipt);
+          chunkMissingReceipts.push(missingReceipt);
+          exportSummary.receipt_files_missing += 1;
+          chunkSummary.receipt_files_missing += 1;
+        }
+      }
+    }
 
-  if (signedUrlError) return { statusCode: 500, body: `Could not create the export download link: ${signedUrlError.message}` };
+    zip.file('claims.csv', rows.join('\n'));
+    zip.file('export-summary.json', JSON.stringify(chunkSummary, null, 2));
+    if (chunkMissingReceipts.length) {
+      zip.file('missing-receipts.txt', chunkMissingReceipts.join('\n'));
+    }
+
+    const partLabel = chunks.length > 1 ? `-part-${index + 1}-of-${chunks.length}` : '';
+    const fileName = `GOODSTUPH-approved-claims-${rangeLabel}${partLabel}.zip`;
+    const exportPath = `${rangeLabel}/${Date.now()}-${index + 1}-${fileName}`;
+    const archive = await zip.generateAsync({ type: 'nodebuffer' });
+
+    if (archive.length > 50 * 1024 * 1024) {
+      return {
+        statusCode: 413,
+        body: `One export ZIP part is larger than Supabase's 50 MB storage limit. Try a shorter date range or fewer users.`,
+      };
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from(EXPORT_BUCKET)
+      .upload(exportPath, archive, { contentType: 'application/zip' });
+
+    if (uploadError) return { statusCode: 500, body: `Could not save the export ZIP: ${uploadError.message}` };
+
+    const { data: signedData, error: signedUrlError } = await supabase.storage
+      .from(EXPORT_BUCKET)
+      .createSignedUrl(exportPath, 600, { download: fileName });
+
+    if (signedUrlError) return { statusCode: 500, body: `Could not create the export download link: ${signedUrlError.message}` };
+
+    downloads.push({
+      downloadUrl: signedData.signedUrl,
+      fileName,
+      part: index + 1,
+      totalParts: chunks.length,
+    });
+  }
+
+  await supabase.from('audit_logs').insert({
+    actor_id: auth.profile.id,
+    action: 'claims_exported',
+    after_values: {
+      startDate,
+      endDate,
+      claimantId: claimantId || null,
+      count: claims?.length || 0,
+      parts: downloads.length,
+    },
+  });
 
   return {
     statusCode: 200,
@@ -230,8 +314,9 @@ export async function handler(event) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      downloadUrl: signedData.signedUrl,
-      fileName,
+      downloadUrl: downloads[0]?.downloadUrl,
+      fileName: downloads[0]?.fileName,
+      downloads,
     }),
   };
 }

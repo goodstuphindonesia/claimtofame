@@ -1069,7 +1069,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   }));
   const [claimantFilter, setClaimantFilter] = useState('');
   const [exportStatus, setExportStatus] = useState({ type: '', message: '' });
-  const [exportLink, setExportLink] = useState(null);
+  const [exportLinks, setExportLinks] = useState([]);
   const reportClaims = useMemo(
     () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
     [claims, claimantFilter]
@@ -1098,7 +1098,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   async function exportDateRange() {
     if (!hasDateRange) {
       setExportStatus({ type: 'error', message: 'Choose a valid start and end date before exporting.' });
-      setExportLink(null);
+      setExportLinks([]);
       return;
     }
 
@@ -1106,33 +1106,56 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
       type: 'info',
       message: 'Compiling the ZIP and generating a download link...',
     });
-    setExportLink(null);
+    setExportLinks([]);
 
-    const { data } = await supabase.auth.getSession();
-    const params = new URLSearchParams({
-      ...dateRange,
-      ...(claimantFilter ? { claimantId: claimantFilter } : {}),
-    });
-    const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${data.session?.access_token || ''}`,
-      },
-    });
-    if (!response.ok) {
-      setExportStatus({ type: 'error', message: await readExportError(response) });
+    try {
+      const { data } = await supabase.auth.getSession();
+      const params = new URLSearchParams({
+        ...dateRange,
+        ...(claimantFilter ? { claimantId: claimantFilter } : {}),
+      });
+      const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${data.session?.access_token || ''}`,
+        },
+      });
+      if (!response.ok) {
+        setExportStatus({ type: 'error', message: await readExportError(response) });
+        return;
+      }
+      const { downloadUrl, fileName, downloads = [] } = await response.json();
+      const nextLinks = downloads.length
+        ? downloads.map((download) => ({
+          url: download.downloadUrl,
+          fileName: download.fileName,
+          part: download.part,
+          totalParts: download.totalParts,
+        }))
+        : [{
+          url: downloadUrl,
+          fileName: fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`,
+          part: 1,
+          totalParts: 1,
+        }].filter((download) => download.url);
+
+      if (!nextLinks.length) {
+        setExportStatus({ type: 'error', message: 'The export completed, but no download link was returned.' });
+        return;
+      }
+      setExportLinks(nextLinks);
+      setExportStatus({
+        type: 'success',
+        message: nextLinks.length === 1
+          ? 'Export ZIP is ready. Use the download link below.'
+          : `Export ZIP is ready in ${nextLinks.length} parts. Download each part below.`,
+      });
+    } catch (error) {
+      setExportStatus({
+        type: 'error',
+        message: `The export request did not finish: ${error.message}. Try a shorter date range if the export contains many receipts.`,
+      });
       return;
     }
-    const { downloadUrl, fileName } = await response.json();
-
-    if (!downloadUrl) {
-      setExportStatus({ type: 'error', message: 'The export completed, but no download link was returned.' });
-      return;
-    }
-    setExportLink({
-      url: downloadUrl,
-      fileName: fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`,
-    });
-    setExportStatus({ type: 'success', message: 'Export ZIP is ready. Use the download link below.' });
   }
 
   return (
@@ -1178,12 +1201,14 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
             {exportStatus.message}
           </div>
         )}
-        {exportLink && (
+        {exportLinks.length > 0 && (
           <div className="export-link-panel">
-            <a href={exportLink.url} download={exportLink.fileName} target="_blank" rel="noopener noreferrer">
-              <Download size={18} /> Download ZIP
-            </a>
-            <span>{exportLink.fileName}</span>
+            {exportLinks.map((exportLink) => (
+              <a key={exportLink.fileName} href={exportLink.url} download={exportLink.fileName} target="_blank" rel="noopener noreferrer">
+                <Download size={18} /> {exportLink.totalParts > 1 ? `Download ZIP part ${exportLink.part}` : 'Download ZIP'}
+                <span>{exportLink.fileName}</span>
+              </a>
+            ))}
             <small>This secure link expires in 10 minutes.</small>
           </div>
         )}
