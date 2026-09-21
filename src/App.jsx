@@ -1068,6 +1068,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
     endDate: dateValue(),
   }));
   const [claimantFilter, setClaimantFilter] = useState('');
+  const [exportStatus, setExportStatus] = useState({ type: '', message: '' });
   const reportClaims = useMemo(
     () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
     [claims, claimantFilter]
@@ -1083,15 +1084,31 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   );
   const totals = useMemo(() => summarizeClaims(reportClaims), [reportClaims]);
 
-  async function exportDateRange() {
+  async function readExportError(response) {
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      return data.error || data.message || text;
+    } catch {
+      return text;
+    }
+  }
+
+  async function exportDateRange(delivery = 'download') {
     if (!hasDateRange) {
-      alert('Choose a valid start and end date before exporting.');
+      setExportStatus({ type: 'error', message: 'Choose a valid start and end date before exporting.' });
       return;
     }
+
+    setExportStatus({
+      type: 'info',
+      message: delivery === 'email' ? 'Compiling the ZIP and preparing the email...' : 'Compiling the ZIP...',
+    });
 
     const { data } = await supabase.auth.getSession();
     const params = new URLSearchParams({
       ...dateRange,
+      delivery,
       ...(claimantFilter ? { claimantId: claimantFilter } : {}),
     });
     const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
@@ -1100,18 +1117,24 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
       },
     });
     if (!response.ok) {
-      alert(await response.text());
+      setExportStatus({ type: 'error', message: await readExportError(response) });
       return;
     }
     const { downloadUrl, fileName } = await response.json();
+    if (delivery === 'email') {
+      setExportStatus({ type: 'success', message: 'Export link sent to your admin email.' });
+      return;
+    }
+
     if (!downloadUrl) {
-      alert('The export completed, but no download link was returned.');
+      setExportStatus({ type: 'error', message: 'The export completed, but no download link was returned.' });
       return;
     }
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`;
     link.click();
+    setExportStatus({ type: 'success', message: 'Export ZIP is ready. If the download did not start, use Email Link instead.' });
   }
 
   return (
@@ -1142,7 +1165,8 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
                 onChange={(e) => setDateRange((current) => ({ ...current, endDate: e.target.value }))}
               />
             </label>
-            <button className="primary-button" onClick={exportDateRange} disabled={!exportableClaims.length || !hasDateRange}><Download size={18} /> Export</button>
+            <button className="primary-button" onClick={() => exportDateRange('download')} disabled={!hasDateRange}><Download size={18} /> Export</button>
+            <button className="secondary-button" onClick={() => exportDateRange('email')} disabled={!hasDateRange}><FileText size={18} /> Email Link</button>
           </div>
         </div>
         <p className="muted">
@@ -1152,6 +1176,11 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
               ? `${exportableClaims.length} admin-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}.`
               : `No admin-approved or paid claims found from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}. Choose another date range after final approval.`}
         </p>
+        {exportStatus.message && (
+          <div className={exportStatus.type === 'error' ? 'notice' : 'notice success-notice'}>
+            {exportStatus.message}
+          </div>
+        )}
       </div>
       <div className="report-grid">
         {totals.map((row) => (

@@ -798,6 +798,14 @@ button:disabled {
   box-shadow: var(--shadow-sm);
 }
 
+.success-notice {
+  border-color: rgba(199, 255, 69, 0.32);
+  background:
+    linear-gradient(135deg, rgba(199, 255, 69, 0.1), rgba(255, 255, 255, 0.02)),
+    rgba(12, 18, 8, 0.88);
+  color: #e8ffae;
+}
+
 .help-panel {
   margin-top: 16px;
   display: grid;
