@@ -236,7 +236,7 @@ values (
   'claim-exports',
   false,
   null,
-  array['application/zip']
+  array['application/zip', 'application/json']
 )
 on conflict (id) do update set
   public = excluded.public,

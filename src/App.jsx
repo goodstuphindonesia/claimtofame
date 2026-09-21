@@ -1070,6 +1070,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   const [claimantFilter, setClaimantFilter] = useState('');
   const [exportStatus, setExportStatus] = useState({ type: '', message: '' });
   const [exportLinks, setExportLinks] = useState([]);
+  const [exporting, setExporting] = useState(false);
   const reportClaims = useMemo(
     () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
     [claims, claimantFilter]
@@ -1102,9 +1103,10 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
       return;
     }
 
+    setExporting(true);
     setExportStatus({
       type: 'info',
-      message: 'Compiling the ZIP and generating a download link...',
+      message: 'Starting export job...',
     });
     setExportLinks([]);
 
@@ -1121,9 +1123,58 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
       });
       if (!response.ok) {
         setExportStatus({ type: 'error', message: await readExportError(response) });
+        setExporting(false);
         return;
       }
-      const { downloadUrl, fileName, downloads = [] } = await response.json();
+      const initialJob = await response.json();
+      if (!initialJob.jobId) {
+        setExportStatus({ type: 'error', message: 'The export started, but no job id was returned.' });
+        setExporting(false);
+        return;
+      }
+
+      setExportStatus({ type: 'info', message: initialJob.message || 'Export started. Preparing ZIP files...' });
+      await pollExportJob(initialJob.jobId, data.session?.access_token || '');
+    } catch (error) {
+      setExportStatus({
+        type: 'error',
+        message: `The export request did not finish: ${error.message}. Try a shorter date range if the export contains many receipts.`,
+      });
+      setExporting(false);
+    }
+  }
+
+  async function pollExportJob(jobId, token) {
+    const startedAt = Date.now();
+    const maxWaitMs = 12 * 60 * 1000;
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const response = await fetch(`/.netlify/functions/export-approved?jobId=${encodeURIComponent(jobId)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        setExportStatus({ type: 'error', message: await readExportError(response) });
+        setExporting(false);
+        return;
+      }
+
+      const job = await response.json();
+      if (job.status === 'pending' || job.status === 'running') {
+        setExportStatus({ type: 'info', message: job.message || 'Export is still running...' });
+        continue;
+      }
+
+      if (job.status === 'failed') {
+        setExportStatus({ type: 'error', message: job.message || 'The export could not be completed.' });
+        setExporting(false);
+        return;
+      }
+
+      const { downloadUrl, fileName, downloads = [] } = job;
       const nextLinks = downloads.length
         ? downloads.map((download) => ({
           url: download.downloadUrl,
@@ -1140,6 +1191,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
 
       if (!nextLinks.length) {
         setExportStatus({ type: 'error', message: 'The export completed, but no download link was returned.' });
+        setExporting(false);
         return;
       }
       setExportLinks(nextLinks);
@@ -1149,13 +1201,12 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
           ? 'Export ZIP is ready. Use the download link below.'
           : `Export ZIP is ready in ${nextLinks.length} parts. Download each part below.`,
       });
-    } catch (error) {
-      setExportStatus({
-        type: 'error',
-        message: `The export request did not finish: ${error.message}. Try a shorter date range if the export contains many receipts.`,
-      });
+      setExporting(false);
       return;
     }
+
+    setExportStatus({ type: 'error', message: 'The export is taking longer than expected. Try a shorter date range and start a new export.' });
+    setExporting(false);
   }
 
   return (
@@ -1186,7 +1237,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
                 onChange={(e) => setDateRange((current) => ({ ...current, endDate: e.target.value }))}
               />
             </label>
-            <button className="primary-button" onClick={exportDateRange} disabled={!hasDateRange}><Download size={18} /> Generate Link</button>
+            <button className="primary-button" onClick={exportDateRange} disabled={!hasDateRange || exporting}><Download size={18} /> {exporting ? 'Exporting...' : 'Generate Link'}</button>
           </div>
         </div>
         <p className="muted">
