@@ -806,6 +806,33 @@ button:disabled {
   color: #e8ffae;
 }
 
+.export-link-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(199, 255, 69, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(199, 255, 69, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(7, 12, 6, 0.82);
+}
+
+.export-link-panel a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--lime);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.export-link-panel span,
+.export-link-panel small {
+  color: var(--muted);
+}
+
 .help-panel {
   margin-top: 16px;
   display: grid;

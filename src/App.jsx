@@ -1069,6 +1069,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   }));
   const [claimantFilter, setClaimantFilter] = useState('');
   const [exportStatus, setExportStatus] = useState({ type: '', message: '' });
+  const [exportLink, setExportLink] = useState(null);
   const reportClaims = useMemo(
     () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
     [claims, claimantFilter]
@@ -1094,21 +1095,22 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
     }
   }
 
-  async function exportDateRange(delivery = 'download') {
+  async function exportDateRange() {
     if (!hasDateRange) {
       setExportStatus({ type: 'error', message: 'Choose a valid start and end date before exporting.' });
+      setExportLink(null);
       return;
     }
 
     setExportStatus({
       type: 'info',
-      message: delivery === 'email' ? 'Compiling the ZIP and preparing the email...' : 'Compiling the ZIP...',
+      message: 'Compiling the ZIP and generating a download link...',
     });
+    setExportLink(null);
 
     const { data } = await supabase.auth.getSession();
     const params = new URLSearchParams({
       ...dateRange,
-      delivery,
       ...(claimantFilter ? { claimantId: claimantFilter } : {}),
     });
     const response = await fetch(`/.netlify/functions/export-approved?${params.toString()}`, {
@@ -1121,20 +1123,16 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
       return;
     }
     const { downloadUrl, fileName } = await response.json();
-    if (delivery === 'email') {
-      setExportStatus({ type: 'success', message: 'Export link sent to your admin email.' });
-      return;
-    }
 
     if (!downloadUrl) {
       setExportStatus({ type: 'error', message: 'The export completed, but no download link was returned.' });
       return;
     }
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`;
-    link.click();
-    setExportStatus({ type: 'success', message: 'Export ZIP is ready. If the download did not start, use Email Link instead.' });
+    setExportLink({
+      url: downloadUrl,
+      fileName: fileName || `GOODSTUPH-approved-claims-${dateRange.startDate}-to-${dateRange.endDate}.zip`,
+    });
+    setExportStatus({ type: 'success', message: 'Export ZIP is ready. Use the download link below.' });
   }
 
   return (
@@ -1165,8 +1163,7 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
                 onChange={(e) => setDateRange((current) => ({ ...current, endDate: e.target.value }))}
               />
             </label>
-            <button className="primary-button" onClick={() => exportDateRange('download')} disabled={!hasDateRange}><Download size={18} /> Export</button>
-            <button className="secondary-button" onClick={() => exportDateRange('email')} disabled={!hasDateRange}><FileText size={18} /> Email Link</button>
+            <button className="primary-button" onClick={exportDateRange} disabled={!hasDateRange}><Download size={18} /> Generate Link</button>
           </div>
         </div>
         <p className="muted">
@@ -1179,6 +1176,15 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
         {exportStatus.message && (
           <div className={exportStatus.type === 'error' ? 'notice' : 'notice success-notice'}>
             {exportStatus.message}
+          </div>
+        )}
+        {exportLink && (
+          <div className="export-link-panel">
+            <a href={exportLink.url} download={exportLink.fileName} target="_blank" rel="noopener noreferrer">
+              <Download size={18} /> Download ZIP
+            </a>
+            <span>{exportLink.fileName}</span>
+            <small>This secure link expires in 10 minutes.</small>
           </div>
         )}
       </div>

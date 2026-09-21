@@ -1,5 +1,4 @@
 import JSZip from 'jszip';
-import nodemailer from 'nodemailer';
 import { serviceClient, requireSuperAdmin } from './_supabase.js';
 
 function csvEscape(value) {
@@ -12,28 +11,6 @@ function safeFileName(value) {
 }
 
 const EXPORT_BUCKET = 'claim-exports';
-
-function transporter() {
-  const port = Number(process.env.SMTP_PORT || 465);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: port === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
-function htmlEscape(value) {
-  return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
 
 function isDateValue(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
@@ -73,31 +50,6 @@ async function loadReceiptRecords(supabase, claim) {
   }));
 }
 
-async function emailExportLink({ to, downloadUrl, fileName, startDate, endDate, claimCount, claimantLabel }) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error('SMTP_USER and SMTP_PASS must be configured before export links can be emailed.');
-  }
-
-  const selectedUserLine = claimantLabel ? `<p><strong>User:</strong> ${htmlEscape(claimantLabel)}</p>` : '';
-
-  await transporter().sendMail({
-    from: `"Claim to Fame" <${process.env.SMTP_USER}>`,
-    to,
-    subject: `Claim to Fame export: ${startDate} to ${endDate}`,
-    html: `
-      <div style="font-family:Arial,sans-serif;color:#161616;line-height:1.5">
-        <h2>Claim to Fame export is ready</h2>
-        <p>Your approved claims ZIP has been compiled.</p>
-        <p><strong>Date range:</strong> ${htmlEscape(startDate)} to ${htmlEscape(endDate)}</p>
-        ${selectedUserLine}
-        <p><strong>Claims included:</strong> ${claimCount}</p>
-        <p><a href="${htmlEscape(downloadUrl)}">Download ${htmlEscape(fileName)}</a></p>
-        <p style="color:#666;font-size:13px">This secure download link expires in 10 minutes.</p>
-      </div>
-    `,
-  });
-}
-
 export async function handler(event) {
   const supabase = serviceClient();
   const auth = await requireSuperAdmin(event, supabase);
@@ -106,7 +58,6 @@ export async function handler(event) {
   const startDate = event.queryStringParameters?.startDate;
   const endDate = event.queryStringParameters?.endDate;
   const claimantId = event.queryStringParameters?.claimantId || '';
-  const delivery = event.queryStringParameters?.delivery || 'download';
 
   if (!isDateValue(startDate) || !isDateValue(endDate)) {
     return { statusCode: 400, body: 'Use startDate=YYYY-MM-DD and endDate=YYYY-MM-DD.' };
@@ -118,10 +69,6 @@ export async function handler(event) {
 
   if (startDate > endDate) {
     return { statusCode: 400, body: 'Start date must be before or equal to end date.' };
-  }
-
-  if (!['download', 'email'].includes(delivery)) {
-    return { statusCode: 400, body: 'Use delivery=download or delivery=email.' };
   }
 
   const exclusiveEndDate = nextDateValue(endDate);
@@ -203,15 +150,8 @@ export async function handler(event) {
 
   const rows = [headers.map(csvEscape).join(',')];
   const missingReceipts = [];
-  let selectedClaimantLabel = '';
 
   for (const claim of claims || []) {
-    if (!selectedClaimantLabel && claimantId) {
-      selectedClaimantLabel = claim.claimant?.full_name
-        ? `${claim.claimant.full_name} (${claim.claimant.email})`
-        : claim.claimant?.email || claimantId;
-    }
-
     const employee = safeFileName(claim.claimant?.email);
     const receiptNames = [];
     const receipts = await loadReceiptRecords(supabase, claim);
@@ -259,7 +199,7 @@ export async function handler(event) {
   await supabase.from('audit_logs').insert({
     actor_id: auth.profile.id,
     action: 'claims_exported',
-    after_values: { startDate, endDate, claimantId: claimantId || null, delivery, count: claims?.length || 0 },
+    after_values: { startDate, endDate, claimantId: claimantId || null, count: claims?.length || 0 },
   });
 
   const fileName = `GOODSTUPH-approved-claims-${rangeLabel}.zip`;
@@ -284,22 +224,6 @@ export async function handler(event) {
 
   if (signedUrlError) return { statusCode: 500, body: `Could not create the export download link: ${signedUrlError.message}` };
 
-  if (delivery === 'email') {
-    try {
-      await emailExportLink({
-        to: auth.user.email,
-        downloadUrl: signedData.signedUrl,
-        fileName,
-        startDate,
-        endDate,
-        claimCount: claims.length,
-        claimantLabel: selectedClaimantLabel,
-      });
-    } catch (emailError) {
-      return { statusCode: 500, body: `The export ZIP was created, but the email could not be sent: ${emailError.message}` };
-    }
-  }
-
   return {
     statusCode: 200,
     headers: {
@@ -308,7 +232,6 @@ export async function handler(event) {
     body: JSON.stringify({
       downloadUrl: signedData.signedUrl,
       fileName,
-      emailedTo: delivery === 'email' ? auth.user.email : null,
     }),
   };
 }
