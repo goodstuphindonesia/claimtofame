@@ -13,6 +13,17 @@ function safeFileName(value) {
 const EXPORT_BUCKET = 'claim-exports';
 const EXPORT_PART_LIMIT_BYTES = 42 * 1024 * 1024;
 const FALLBACK_RECEIPT_BYTES = 5 * 1024 * 1024;
+const ACCOUNTING_CODE_BY_CATEGORY = new Map([
+  ['meals', 'Company Expense'],
+  ['software subscription', 'Company Expense'],
+  ['production', 'Company Expense'],
+  ['mobile', 'Employee Benefits'],
+  ['grooming', 'Employee Benefits'],
+]);
+
+function accountingCodeFor(categoryName) {
+  return ACCOUNTING_CODE_BY_CATEGORY.get(String(categoryName || '').trim().toLowerCase()) || '';
+}
 
 function jobPath(jobId) {
   return `jobs/${jobId}.json`;
@@ -199,6 +210,7 @@ export async function handler(event) {
     'employee_name',
     'employee_email',
     'category',
+    'accounting_code',
     'vendor_merchant',
     'amount',
     'currency',
@@ -234,6 +246,7 @@ export async function handler(event) {
       claim.claimant?.full_name,
       claim.claimant?.email,
       claim.category?.name,
+      accountingCodeFor(claim.category?.name),
       claim.vendor_name,
       claim.amount,
       claim.currency,
