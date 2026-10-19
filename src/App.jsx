@@ -1325,7 +1325,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
   }
 
   async function deleteUser(user) {
-    if (!confirm(`Permanently delete ${user.full_name || user.email}? This removes their login account.`)) return;
+    if (!confirm(`Remove access for ${user.full_name || user.email}? They will no longer be able to sign in, but their claims and records will be kept.`)) return;
     setSettingsMessage('');
     const { data } = await supabase.auth.getSession();
     const response = await fetch('/.netlify/functions/invite-user', {
@@ -1340,7 +1340,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
       setSettingsMessage(await response.text());
       return;
     }
-    setSettingsMessage('User deleted.');
+    setSettingsMessage('User access removed. Their claims and records were kept.');
     onChanged();
   }
 
@@ -1379,11 +1379,13 @@ function SettingsView({ supabase, users, categories, onChanged }) {
       },
       body: JSON.stringify(invite),
     });
+    const responseMessage = await response.text();
     if (!response.ok) {
-      alert(await response.text());
+      alert(responseMessage);
       return;
     }
     setInvite({ email: '', full_name: '', role: 'employee', manager_id: '' });
+    setSettingsMessage(responseMessage);
     onChanged();
   }
 
@@ -1416,7 +1418,7 @@ function SettingsView({ supabase, users, categories, onChanged }) {
                 ))}
               </select>
             </label>
-            <button className="primary-button invite-submit" type="submit"><Plus size={18} /> Invite</button>
+            <button className="primary-button invite-submit" type="submit"><Plus size={18} /> Add user</button>
           </form>
           {settingsMessage && <div className="notice">{settingsMessage}</div>}
           {users.map((user) => (

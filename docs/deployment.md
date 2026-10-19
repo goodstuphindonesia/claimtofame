@@ -23,7 +23,7 @@
 5. Save.
 6. Sign out and sign back in.
 
-After this, Super Admins can invite and activate other users from inside the app.
+After this, Super Admins can add and activate other users from inside the app. No invitation email is sent; users sign in with their GOODSTUPH Google account.
 
 ## 3. Google Workspace Email
 
@@ -79,7 +79,7 @@ The publishable key is returned to the browser at runtime by a Netlify function.
 2. After the deploy finishes, copy the live Netlify URL.
 3. Add that URL to Supabase Authentication URL settings.
 4. Test Google login.
-5. Invite one employee and one manager.
+5. Add one employee and one manager, then have each person sign in with Google.
 6. Submit a claim with a small test receipt.
 7. Approve as manager, then final approve as Super Admin.
 8. Export the approved month.
