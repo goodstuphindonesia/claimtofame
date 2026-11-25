@@ -1071,6 +1071,17 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   const [exportStatus, setExportStatus] = useState({ type: '', message: '' });
   const [exportLinks, setExportLinks] = useState([]);
   const [exporting, setExporting] = useState(false);
+  const jakartaDate = (timestamp) => {
+    if (!timestamp) return '';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date(timestamp));
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  };
   const reportClaims = useMemo(
     () => claims.filter((claim) => !claimantFilter || claim.claimant_id === claimantFilter),
     [claims, claimantFilter]
@@ -1081,8 +1092,9 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
   const exportableClaims = reportClaims.filter(
     (claim) => ['admin_approved', 'paid'].includes(claim.status)
       && hasDateRange
-      && claim.incurred_date >= dateRange.startDate
-      && claim.incurred_date <= dateRange.endDate
+      && claim.events?.some((event) => event.action === 'admin_approved'
+        && jakartaDate(event.created_at) >= dateRange.startDate
+        && jakartaDate(event.created_at) <= dateRange.endDate)
   );
   const totals = useMemo(() => summarizeClaims(reportClaims), [reportClaims]);
 
@@ -1244,8 +1256,8 @@ function ReportsView({ supabase, claims, users, auditLogs }) {
           {!hasDateRange
             ? 'Choose a valid start and end date to export approved claims.'
             : exportableClaims.length
-              ? `${exportableClaims.length} admin-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}.`
-              : `No admin-approved or paid claims found from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}. Choose another date range after final approval.`}
+              ? `${exportableClaims.length} final-approved or paid claim${exportableClaims.length === 1 ? '' : 's'} will be exported based on final approval date from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}.`
+              : `No final-approved claims found from ${formatDate(dateRange.startDate)} to ${formatDate(dateRange.endDate)}. Choose another final-approval date range.`}
         </p>
         {exportStatus.message && (
           <div className={exportStatus.type === 'error' ? 'notice' : 'notice success-notice'}>

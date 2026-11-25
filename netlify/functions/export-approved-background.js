@@ -43,6 +43,10 @@ function nextDateValue(value) {
   return date.toISOString().slice(0, 10);
 }
 
+function jakartaDayStart(value) {
+  return `${value}T00:00:00+07:00`;
+}
+
 async function ensureExportBucket(supabase) {
   const bucketOptions = {
     public: false,
@@ -147,58 +151,65 @@ export async function handler(event) {
   }
 
   try {
-    let claimQuery = supabase
-    .from('claims')
-    .select(`
-      *,
-      claimant:profiles!claims_claimant_id_fkey(full_name,email),
-      category:claim_categories(name),
-      receipts:claim_receipts(file_name,file_path,file_size)
-    `)
-    .in('status', ['admin_approved', 'paid'])
-    .gte('incurred_date', startDate)
-    .lt('incurred_date', exclusiveEndDate)
-    .order('incurred_date', { ascending: true });
+    const { data: approvalEvents, error: eventError } = await supabase
+      .from('approval_events')
+      .select('claim_id,created_at')
+      .eq('action', 'admin_approved')
+      .gte('created_at', jakartaDayStart(startDate))
+      .lt('created_at', jakartaDayStart(exclusiveEndDate))
+      .order('created_at', { ascending: true });
 
-  if (claimantId) {
-    claimQuery = claimQuery.eq('claimant_id', claimantId);
-  }
+    if (eventError) throw eventError;
 
-    const { data: claims, error } = await claimQuery;
+    const approvedAtByClaimId = new Map();
+    for (const approvalEvent of approvalEvents || []) {
+      // The latest final approval is the one that places a claim in this export period.
+      approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
+    }
 
-    if (error) throw error;
-
-    if (!claims?.length) {
+    const claimIds = [...approvedAtByClaimId.keys()];
+    if (!claimIds.length) {
       await writeJobStatus(supabase, jobId, {
         status: 'failed',
-        message: `No admin-approved or paid claims found from ${startDate} to ${endDate}. Choose a date range with approved claims.`,
+        message: `No claims received final approval from ${startDate} to ${endDate}. Choose another final-approval date range.`,
         downloads: [],
       });
       return { statusCode: 200, body: 'No claims to export.' };
     }
 
-  const claimIds = claims.map((claim) => claim.id);
-  const { data: approvalEvents, error: eventError } = await supabase
-    .from('approval_events')
-    .select('claim_id,created_at')
-    .eq('action', 'admin_approved')
-    .in('claim_id', claimIds)
-    .order('created_at', { ascending: true });
+    let claimQuery = supabase
+      .from('claims')
+      .select(`
+        *,
+        claimant:profiles!claims_claimant_id_fkey(full_name,email),
+        category:claim_categories(name),
+        receipts:claim_receipts(file_name,file_path,file_size)
+      `)
+      .in('id', claimIds)
+      .in('status', ['admin_approved', 'paid'])
+      .order('incurred_date', { ascending: true });
 
-  if (eventError) throw eventError;
-
-  const approvedAtByClaimId = new Map();
-  for (const approvalEvent of approvalEvents || []) {
-    if (!approvedAtByClaimId.has(approvalEvent.claim_id)) {
-      approvedAtByClaimId.set(approvalEvent.claim_id, approvalEvent.created_at);
+    if (claimantId) {
+      claimQuery = claimQuery.eq('claimant_id', claimantId);
     }
-  }
+
+    const { data: claims, error } = await claimQuery;
+    if (error) throw error;
+
+    if (!claims?.length) {
+      await writeJobStatus(supabase, jobId, {
+        status: 'failed',
+        message: `No final-approved claims for the selected user were found from ${startDate} to ${endDate}.`,
+        downloads: [],
+      });
+      return { statusCode: 200, body: 'No claims to export.' };
+    }
 
   const exportSummary = {
     requested_start_date: startDate,
     requested_end_date: endDate,
     requested_claimant_id: claimantId || null,
-    date_range_rule: 'incurred_date is within selected date range, inclusive',
+    date_range_rule: 'final admin approval is within the selected date range, inclusive, in Asia/Jakarta time',
     exported_claims: claims.length,
     receipt_files_found: 0,
     receipt_files_exported: 0,
@@ -284,7 +295,7 @@ export async function handler(event) {
       requested_start_date: startDate,
       requested_end_date: endDate,
       requested_claimant_id: claimantId || null,
-      date_range_rule: 'incurred_date is within selected date range, inclusive',
+      date_range_rule: 'final admin approval is within the selected date range, inclusive, in Asia/Jakarta time',
       part: index + 1,
       total_parts: chunks.length,
       exported_claims: chunk.length,
